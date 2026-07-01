@@ -1,5 +1,8 @@
 from django.db import models, transaction
 
+ITEM_STATUS_DISPONIVEL = "Disponivel"
+ITEM_STATUS_EM_CAUTELA = "Em Cautela"
+
 
 class TimestampedModel(models.Model):
     criado_em = models.DateTimeField(auto_now_add=True)
@@ -9,6 +12,38 @@ class TimestampedModel(models.Model):
         abstract = True
 
 
+class Departamento(TimestampedModel):
+    nome = models.CharField(max_length=180, unique=True)
+    sigla = models.CharField(max_length=30, blank=True)
+    ativo = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["nome"]
+
+    def __str__(self):
+        return self.sigla or self.nome
+
+
+class Delegacia(TimestampedModel):
+    nome = models.CharField(max_length=200)
+    codigo = models.CharField(max_length=40, blank=True)
+    cidade = models.CharField(max_length=120, blank=True)
+    departamento = models.ForeignKey(
+        Departamento,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="delegacias",
+    )
+    ativo = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["nome"]
+
+    def __str__(self):
+        return self.nome
+
+
 class Lotacao(TimestampedModel):
     depto = models.CharField(max_length=120)
     nome = models.CharField(max_length=200)
@@ -16,6 +51,20 @@ class Lotacao(TimestampedModel):
     resp = models.CharField(max_length=180, blank=True)
     tel = models.CharField(max_length=40, blank=True)
     end = models.CharField(max_length=255, blank=True)
+    departamento_ref = models.ForeignKey(
+        Departamento,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="lotacoes",
+    )
+    delegacia_ref = models.ForeignKey(
+        Delegacia,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="lotacoes",
+    )
 
     class Meta:
         ordering = ["depto", "nome"]
@@ -33,6 +82,20 @@ class Policial(TimestampedModel):
     tel = models.CharField(max_length=40, blank=True)
     email = models.EmailField(blank=True)
     obs = models.TextField(blank=True)
+    departamento_ref = models.ForeignKey(
+        Departamento,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="policiais",
+    )
+    delegacia_ref = models.ForeignKey(
+        Delegacia,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="policiais",
+    )
 
     class Meta:
         ordering = ["nome"]
@@ -76,7 +139,8 @@ class Item(TimestampedModel):
     )
     dt_aq = models.DateField(null=True, blank=True)
     dt_val = models.DateField(null=True, blank=True)
-    status = models.CharField(max_length=40, default="Disponivel")
+    valor_compra = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    status = models.CharField(max_length=40, default=ITEM_STATUS_DISPONIVEL)
     obs = models.TextField(blank=True)
 
     class Meta:
@@ -84,6 +148,89 @@ class Item(TimestampedModel):
 
     def __str__(self):
         return self.descricao
+
+
+class Patrimonio(TimestampedModel):
+    codigo = models.CharField(max_length=80, unique=True)
+    descricao = models.CharField(max_length=200, blank=True)
+    categoria = models.CharField(max_length=80, blank=True)
+    departamento = models.ForeignKey(
+        Departamento,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="patrimonios",
+    )
+    delegacia = models.ForeignKey(
+        Delegacia,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="patrimonios",
+    )
+    ativo = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["codigo"]
+
+    def __str__(self):
+        return self.codigo
+
+
+class UsuarioSistema(TimestampedModel):
+    username = models.CharField(max_length=80, unique=True)
+    nome = models.CharField(max_length=180)
+    cargo = models.CharField(max_length=120, blank=True)
+    policial = models.ForeignKey(
+        Policial,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="usuarios_sistema",
+    )
+    departamento = models.ForeignKey(
+        Departamento,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="usuarios",
+    )
+    delegacia = models.ForeignKey(
+        Delegacia,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="usuarios",
+    )
+    ativo = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["nome"]
+
+    def __str__(self):
+        return self.nome
+
+
+class Arma(TimestampedModel):
+    item = models.OneToOneField(Item, on_delete=models.CASCADE, related_name="arma_detalhe")
+    patrimonio = models.ForeignKey(
+        Patrimonio,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="armas",
+    )
+    tipo = models.CharField(max_length=120, blank=True)
+    marca = models.CharField(max_length=120, blank=True)
+    modelo = models.CharField(max_length=120, blank=True)
+    calibre = models.CharField(max_length=60, blank=True)
+    numero_serie = models.CharField(max_length=120, blank=True)
+
+    class Meta:
+        ordering = ["marca", "modelo", "numero_serie"]
+
+    def __str__(self):
+        return f"{self.marca} {self.modelo}".strip() or self.item.descricao
 
 
 class Servico(TimestampedModel):
@@ -126,15 +273,28 @@ class Servico(TimestampedModel):
         return str(next_num).zfill(4)
 
 class Cautela(TimestampedModel):
+    # Constantes para status
+    STATUS_ATIVA = "Ativa"
+    STATUS_DEVOLVIDO = "Devolvido"
+
     numero = models.CharField(max_length=30, unique=True)
     data_saida = models.DateField()
     data_prev = models.DateField(null=True, blank=True)
     data_dev = models.DateField(null=True, blank=True)
-    matricula = models.CharField(max_length=40)
-    policial = models.CharField(max_length=180)
-    depto = models.CharField(max_length=120)
-    lotacao = models.CharField(max_length=200)
+    policial = models.ForeignKey(
+        Policial,
+        on_delete=models.PROTECT,  # Impede a exclusão de um policial com cautelas
+        related_name="cautelas",
+    )
+    # Campos denormalizados para manter o histórico
+    matricula = models.CharField(max_length=40, blank=True)
+    policial_nome = models.CharField(max_length=180, blank=True)
+    depto = models.CharField(max_length=120, blank=True)
+    lotacao = models.CharField(max_length=200, blank=True)
+
     item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="cautelas")
+
+    # Campos denormalizados do item
     item_desc = models.CharField(max_length=200)
     categoria = models.CharField(max_length=80)
     serie = models.CharField(max_length=120, blank=True)
@@ -145,10 +305,6 @@ class Cautela(TimestampedModel):
     obs_dev = models.TextField(blank=True)
 
     class Meta:
-        # Constantes para status
-        STATUS_ATIVA = "Ativa"
-        STATUS_DEVOLVIDO = "Devolvido"
-
         ordering = ["-data_saida", "-criado_em"]
 
     def __str__(self):
@@ -158,12 +314,21 @@ class Cautela(TimestampedModel):
     @classmethod
     @transaction.atomic
     def registrar_cautela(cls, **data):
+        policial_obj = data.get("policial")
+        if not policial_obj:
+            raise ValueError("Policial é obrigatório para registrar a cautela.")
+
         item = data["item"]
         qtd = data.get("qtd", 1)
 
         if qtd > item.qtd_disp:
             raise ValueError("Quantidade maior que o estoque disponível.")
 
+        # Popula campos denormalizados do policial
+        data["matricula"] = policial_obj.matricula
+        data["policial_nome"] = policial_obj.nome
+        data["depto"] = policial_obj.depto
+        data["lotacao"] = policial_obj.lotacao
         # Popula campos denormalizados a partir do item, se não forem providos
         data["item_desc"] = data.get("item_desc") or item.descricao
         data["categoria"] = data.get("categoria") or item.categoria
@@ -174,7 +339,7 @@ class Cautela(TimestampedModel):
         # Atualiza o item
         item.qtd_disp -= cautela.qtd
         if item.qtd_disp == 0:
-            item.status = "Em Cautela"
+            item.status = ITEM_STATUS_EM_CAUTELA
         item.save(update_fields=["qtd_disp", "status", "atualizado_em"])
 
         # Cria o movimento
@@ -182,11 +347,15 @@ class Cautela(TimestampedModel):
             data=cautela.data_saida,
             tipo="Saida (Cautela)",
             item=item,
+            arma=getattr(item, "arma_detalhe", None),
+            patrimonio_ref=(getattr(item, "arma_detalhe", None).patrimonio if getattr(item, "arma_detalhe", None) else None),
+            departamento_ref=policial_obj.departamento_ref,
+            delegacia_ref=policial_obj.delegacia_ref,
             item_desc=cautela.item_desc,
             categoria=cautela.categoria,
             qtd=cautela.qtd,
             serie=cautela.serie,
-            policial=cautela.policial,
+            policial=cautela.policial_nome,
             matricula=cautela.matricula,
             lotacao=cautela.lotacao,
             num_cautela=cautela.numero,
@@ -202,8 +371,8 @@ class Cautela(TimestampedModel):
         # Atualiza o item
         item = self.item
         item.qtd_disp += self.qtd
-        if item.status == "Em Cautela":
-            item.status = "Disponivel"
+        if item.status == ITEM_STATUS_EM_CAUTELA:
+            item.status = ITEM_STATUS_DISPONIVEL
         item.save(update_fields=["qtd_disp", "status", "atualizado_em"])
 
         # Atualiza a cautela
@@ -215,8 +384,13 @@ class Cautela(TimestampedModel):
 
         # Cria o movimento de devolução
         Movimento.objects.create(
-            data=data_dev, tipo="Entrada (Devolucao)", item=item, item_desc=self.item_desc,
-            categoria=self.categoria, qtd=self.qtd, serie=self.serie, policial=self.policial,
+            data=data_dev, tipo="Entrada (Devolucao)", item=item,
+            arma=getattr(item, "arma_detalhe", None),
+            patrimonio_ref=(getattr(item, "arma_detalhe", None).patrimonio if getattr(item, "arma_detalhe", None) else None),
+            departamento_ref=self.policial.departamento_ref,
+            delegacia_ref=self.policial.delegacia_ref,
+            item_desc=self.item_desc,
+            categoria=self.categoria, qtd=self.qtd, serie=self.serie, policial=self.policial_nome,
             matricula=self.matricula, lotacao=self.lotacao, num_cautela=self.numero, obs=obs_dev,
         )
 
@@ -224,8 +398,8 @@ class Cautela(TimestampedModel):
     def cancelar_cautela(self):
         if self.status == self.STATUS_ATIVA:
             self.item.qtd_disp += self.qtd
-            if self.item.status == "Em Cautela":
-                self.item.status = "Disponivel"
+            if self.item.status == ITEM_STATUS_EM_CAUTELA:
+                self.item.status = ITEM_STATUS_DISPONIVEL
             self.item.save(update_fields=["qtd_disp", "status", "atualizado_em"])
         self.delete()
 
@@ -233,6 +407,11 @@ class Movimento(TimestampedModel):
     data = models.DateField()
     tipo = models.CharField(max_length=80)
     item = models.ForeignKey(Item, on_delete=models.SET_NULL, null=True, blank=True, related_name="movimentos")
+    arma = models.ForeignKey("Arma", on_delete=models.SET_NULL, null=True, blank=True, related_name="movimentos")
+    patrimonio_ref = models.ForeignKey("Patrimonio", on_delete=models.SET_NULL, null=True, blank=True, related_name="movimentos")
+    departamento_ref = models.ForeignKey("Departamento", on_delete=models.SET_NULL, null=True, blank=True, related_name="movimentos")
+    delegacia_ref = models.ForeignKey("Delegacia", on_delete=models.SET_NULL, null=True, blank=True, related_name="movimentos")
+    usuario_ref = models.ForeignKey("UsuarioSistema", on_delete=models.SET_NULL, null=True, blank=True, related_name="movimentos")
     item_desc = models.CharField(max_length=200)
     categoria = models.CharField(max_length=80)
     qtd = models.PositiveIntegerField(default=1)

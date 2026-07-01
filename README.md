@@ -42,10 +42,15 @@ Admin: `http://127.0.0.1:8000/admin/`
 
 ## Endpoints
 
+- `/api/departamentos/`
+- `/api/delegacias/`
+- `/api/usuarios/`
 - `/api/lotacoes/`
 - `/api/policiais/`
 - `/api/fornecedores/`
 - `/api/itens/`
+- `/api/armas/`
+- `/api/patrimonios/`
 - `/api/servicos/`
 - `/api/cautelas/`
 - `/api/movimentos/`
@@ -55,6 +60,59 @@ Acoes extras:
 - `GET /api/servicos/next-code/`
 - `GET /api/cautelas/next-number/`
 - `POST /api/cautelas/{id}/devolver/`
+- `POST /api/admin/backfill-relacional/` (somente admin/staff autenticado)
+
+## Backfill relacional
+
+O backfill preenche referencias FK novas (departamento, delegacia, patrimonio e arma)
+a partir dos campos legados de texto.
+
+### Via comando Django
+
+Dry-run (nao persiste):
+
+```bash
+python manage.py backfill_relational_refs
+```
+
+Aplicar alteracoes:
+
+```bash
+python manage.py backfill_relational_refs --apply
+```
+
+### Via endpoint protegido (admin/staff)
+
+URL:
+
+```text
+POST /api/admin/backfill-relacional/
+```
+
+Corpo JSON para dry-run:
+
+```json
+{}
+```
+
+Corpo JSON para aplicar:
+
+```json
+{"apply": true}
+```
+
+Exemplo PowerShell:
+
+```powershell
+$cred = Get-Credential
+Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/admin/backfill-relacional/" -Authentication Basic -Credential $cred -ContentType "application/json" -Body '{"apply": true}'
+```
+
+### Via Django Admin
+
+No Admin, em OpcaoMenu, use a acao em massa:
+
+- `Executar backfill relacional (apply)`
 
 ## Filtros de consulta
 

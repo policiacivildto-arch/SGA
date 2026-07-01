@@ -1,17 +1,42 @@
-from rest_framework import status, viewsets
-from rest_framework.decorators import action
-from rest_framework.response import Response
+from io import StringIO
 
-from .models import Cautela, Fornecedor, Item, Lotacao, Movimento, OpcaoMenu, Policial, Servico
+from django.core.management import call_command
+from rest_framework import status, viewsets
+from rest_framework.authentication import BasicAuthentication, SessionAuthentication
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAdminUser
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from .models import (
+    Arma,
+    Cautela,
+    Delegacia,
+    Departamento,
+    Fornecedor,
+    Item,
+    Lotacao,
+    Movimento,
+    OpcaoMenu,
+    Patrimonio,
+    Policial,
+    Servico,
+    UsuarioSistema,
+)
 from .serializers import (
+    ArmaSerializer,
     CautelaSerializer,
+    DelegaciaSerializer,
+    DepartamentoSerializer,
     FornecedorSerializer,
     ItemSerializer,
     LotacaoSerializer,
     MovimentoSerializer,
     OpcaoMenuSerializer,
+    PatrimonioSerializer,
     PolicialSerializer,
     ServicoSerializer,
+    UsuarioSistemaSerializer,
 )
 
 
@@ -35,6 +60,30 @@ class LotacaoViewSet(BaseViewSet):
     filter_map = {"depto": "depto"}
 
 
+class DepartamentoViewSet(BaseViewSet):
+    queryset = Departamento.objects.all()
+    serializer_class = DepartamentoSerializer
+    search_fields = ["nome", "sigla"]
+    ordering_fields = ["nome", "sigla", "criado_em"]
+    filter_map = {"ativo": "ativo"}
+
+
+class DelegaciaViewSet(BaseViewSet):
+    queryset = Delegacia.objects.select_related("departamento").all()
+    serializer_class = DelegaciaSerializer
+    search_fields = ["nome", "codigo", "cidade", "departamento__nome"]
+    ordering_fields = ["nome", "codigo", "cidade", "criado_em"]
+    filter_map = {"ativo": "ativo", "departamento": "departamento_id"}
+
+
+class UsuarioSistemaViewSet(BaseViewSet):
+    queryset = UsuarioSistema.objects.select_related("policial", "departamento", "delegacia").all()
+    serializer_class = UsuarioSistemaSerializer
+    search_fields = ["username", "nome", "cargo", "policial__nome", "departamento__nome", "delegacia__nome"]
+    ordering_fields = ["username", "nome", "cargo", "criado_em"]
+    filter_map = {"ativo": "ativo", "departamento": "departamento_id", "delegacia": "delegacia_id"}
+
+
 class PolicialViewSet(BaseViewSet):
     queryset = Policial.objects.all()
     serializer_class = PolicialSerializer
@@ -56,6 +105,22 @@ class ItemViewSet(BaseViewSet):
     search_fields = ["patrimonio", "descricao", "categoria", "marca", "serie", "status"]
     ordering_fields = ["descricao", "categoria", "qtd_total", "qtd_disp", "criado_em"]
     filter_map = {"categoria": "categoria", "status": "status"}
+
+
+class PatrimonioViewSet(BaseViewSet):
+    queryset = Patrimonio.objects.select_related("departamento", "delegacia").all()
+    serializer_class = PatrimonioSerializer
+    search_fields = ["codigo", "descricao", "categoria", "departamento__nome", "delegacia__nome"]
+    ordering_fields = ["codigo", "descricao", "categoria", "criado_em"]
+    filter_map = {"ativo": "ativo", "departamento": "departamento_id", "delegacia": "delegacia_id"}
+
+
+class ArmaViewSet(BaseViewSet):
+    queryset = Arma.objects.select_related("item", "patrimonio").all()
+    serializer_class = ArmaSerializer
+    search_fields = ["tipo", "marca", "modelo", "calibre", "numero_serie", "item__descricao", "patrimonio__codigo"]
+    ordering_fields = ["tipo", "marca", "modelo", "calibre", "criado_em"]
+    filter_map = {"patrimonio": "patrimonio_id", "item": "item_id"}
 
 
 class ServicoViewSet(BaseViewSet):
@@ -98,11 +163,11 @@ class CautelaViewSet(BaseViewSet):
     serializer_class = CautelaSerializer
     search_fields = [
         "numero",
+        "policial_nome",
         "matricula",
-        "policial",
         "depto",
         "lotacao",
-        "item_desc",
+        "item__descricao", # Busca no campo relacionado
         "serie",
         "status",
     ]
@@ -113,12 +178,12 @@ class CautelaViewSet(BaseViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
-            # A lógica de criação foi movida para um método de classe no modelo
+            # A lógica de criação agora está no método de classe do modelo
             cautela = Cautela.registrar_cautela(**serializer.validated_data)
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Retorna a cautela criada e serializada
+        # Retorna a cautela criada e serializada para o frontend
         response_serializer = self.get_serializer(cautela)
         headers = self.get_success_headers(response_serializer.data)
         return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
@@ -197,3 +262,26 @@ class OpcaoMenuViewSet(BaseViewSet):
             grupos = self.request.query_params.get("grupo").split(",")
             qs = qs.filter(grupo__in=grupos)
         return qs
+
+
+class BackfillRelationalRefsView(APIView):
+    authentication_classes = [SessionAuthentication, BasicAuthentication]
+    permission_classes = [IsAdminUser]
+
+    def post(self, request):
+        apply_changes = bool(request.data.get("apply", False))
+        output = StringIO()
+
+        if apply_changes:
+            call_command("backfill_relational_refs", "--apply", stdout=output)
+        else:
+            call_command("backfill_relational_refs", stdout=output)
+
+        return Response(
+            {
+                "status": "ok",
+                "apply": apply_changes,
+                "output": output.getvalue(),
+            },
+            status=status.HTTP_200_OK,
+        )
