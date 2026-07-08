@@ -1,3 +1,5 @@
+import unicodedata
+
 from django.db import models, transaction
 
 ITEM_STATUS_DISPONIVEL = "Disponivel"
@@ -121,6 +123,44 @@ class Fornecedor(TimestampedModel):
         return self.nome
 
 
+class Compra(TimestampedModel):
+    fornecedor = models.ForeignKey(
+        Fornecedor,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="compras",
+    )
+    categoria = models.CharField(max_length=80)
+    tipo = models.CharField(max_length=120, blank=True)
+    calibre = models.CharField(max_length=60, blank=True)
+    comprimento_cano = models.CharField(max_length=60, blank=True)
+    quantidade_carregadores = models.PositiveIntegerField(default=0)
+    capacidade = models.PositiveIntegerField(default=0)
+    marca = models.CharField(max_length=120, blank=True)
+    modelo = models.CharField(max_length=120, blank=True)
+    nivel = models.CharField(max_length=40, blank=True)
+    tamanho = models.CharField(max_length=40, blank=True)
+    sexo = models.CharField(max_length=40, blank=True)
+    cargo = models.CharField(max_length=120, blank=True)
+    serie = models.CharField(max_length=120, blank=True)
+    descricao = models.CharField(max_length=200)
+    qtd_total = models.PositiveIntegerField(default=1)
+    qtd_disp = models.PositiveIntegerField(default=1)
+    qtd_min = models.PositiveIntegerField(default=1)
+    status = models.CharField(max_length=40, default="Pendente")
+    dt_aq = models.DateField(null=True, blank=True)
+    valor_compra = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    dt_val = models.DateField(null=True, blank=True)
+    obs = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-dt_aq", "-criado_em"]
+
+    def __str__(self):
+        return self.descricao
+
+
 class Item(TimestampedModel):
     patrimonio = models.CharField(max_length=60, blank=True)
     descricao = models.CharField(max_length=200)
@@ -224,6 +264,9 @@ class Arma(TimestampedModel):
     marca = models.CharField(max_length=120, blank=True)
     modelo = models.CharField(max_length=120, blank=True)
     calibre = models.CharField(max_length=60, blank=True)
+    comprimento_cano = models.CharField(max_length=60, blank=True)
+    quantidade_carregadores = models.PositiveIntegerField(default=0)
+    capacidade = models.PositiveIntegerField(default=0)
     numero_serie = models.CharField(max_length=120, blank=True)
 
     class Meta:
@@ -283,7 +326,9 @@ class Cautela(TimestampedModel):
     data_dev = models.DateField(null=True, blank=True)
     policial = models.ForeignKey(
         Policial,
-        on_delete=models.PROTECT,  # Impede a exclusão de um policial com cautelas
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
         related_name="cautelas",
     )
     # Campos denormalizados para manter o histórico
@@ -310,25 +355,104 @@ class Cautela(TimestampedModel):
     def __str__(self):
         return self.numero
 
+    @staticmethod
+    def _normalize_text(value):
+        text = (value or "").strip().lower()
+        if not text:
+            return ""
+        text = unicodedata.normalize("NFKD", text)
+        return "".join(ch for ch in text if not unicodedata.combining(ch))
+
+    @classmethod
+    def _requires_policial(cls, item):
+        categoria_norm = cls._normalize_text(getattr(item, "categoria", ""))
+        if categoria_norm != "armas":
+            return True
+
+        arma_detalhe = getattr(item, "arma_detalhe", None)
+        tipo_norm = cls._normalize_text(getattr(arma_detalhe, "tipo", ""))
+        if not tipo_norm:
+            descricao_norm = cls._normalize_text(getattr(item, "descricao", ""))
+            if "pistola" in descricao_norm or "revolver" in descricao_norm:
+                return True
+        return tipo_norm in {"pistola", "revolver"}
+
+    @staticmethod
+    def _resolve_lotacao_refs(depto, lotacao):
+        depto_norm = (depto or "").strip()
+        lotacao_norm = (lotacao or "").strip()
+        if not depto_norm or not lotacao_norm:
+            return None, None
+
+        lotacao_obj = (
+            Lotacao.objects.select_related("departamento_ref", "delegacia_ref")
+            .filter(depto__iexact=depto_norm, nome__iexact=lotacao_norm)
+            .first()
+        )
+        if not lotacao_obj:
+            return None, None
+
+        return lotacao_obj.departamento_ref, lotacao_obj.delegacia_ref
+
+    @staticmethod
+    def _sync_policial_lotacao(policial_obj, depto_informado, lotacao_informada):
+        if not depto_informado or not lotacao_informada:
+            return
+
+        if policial_obj.depto == depto_informado and policial_obj.lotacao == lotacao_informada:
+            return
+
+        policial_obj.depto = depto_informado
+        policial_obj.lotacao = lotacao_informada
+        policial_obj.save(update_fields=["depto", "lotacao", "atualizado_em"])
+
+    @classmethod
+    def _prepare_vinculo_data(cls, data, policial_obj, requires_policial, depto_informado, lotacao_informada):
+        if requires_policial:
+            cls._sync_policial_lotacao(policial_obj, depto_informado, lotacao_informada)
+            data["matricula"] = policial_obj.matricula
+            data["policial_nome"] = policial_obj.nome
+            data["depto"] = depto_informado or policial_obj.depto
+            data["lotacao"] = lotacao_informada or policial_obj.lotacao
+            return policial_obj.departamento_ref, policial_obj.delegacia_ref
+
+        depto_final = depto_informado or (policial_obj.depto if policial_obj else "")
+        lotacao_final = lotacao_informada or (policial_obj.lotacao if policial_obj else "")
+        if not lotacao_final:
+            raise ValueError("Lotacao e obrigatoria para cautela de armas por unidade.")
+
+        data["policial"] = None
+        data["matricula"] = ""
+        data["policial_nome"] = f"UNIDADE: {lotacao_final}"
+        data["depto"] = depto_final
+        data["lotacao"] = lotacao_final
+        return cls._resolve_lotacao_refs(depto_final, lotacao_final)
+
 
     @classmethod
     @transaction.atomic
     def registrar_cautela(cls, **data):
-        policial_obj = data.get("policial")
-        if not policial_obj:
-            raise ValueError("Policial é obrigatório para registrar a cautela.")
-
         item = data["item"]
+        policial_obj = data.get("policial")
+        requires_policial = cls._requires_policial(item)
+        if requires_policial and not policial_obj:
+            raise ValueError("Policial e obrigatorio para registrar a cautela.")
+
         qtd = data.get("qtd", 1)
+        depto_informado = (data.get("depto") or "").strip()
+        lotacao_informada = (data.get("lotacao") or "").strip()
 
         if qtd > item.qtd_disp:
             raise ValueError("Quantidade maior que o estoque disponível.")
 
-        # Popula campos denormalizados do policial
-        data["matricula"] = policial_obj.matricula
-        data["policial_nome"] = policial_obj.nome
-        data["depto"] = policial_obj.depto
-        data["lotacao"] = policial_obj.lotacao
+        departamento_ref, delegacia_ref = cls._prepare_vinculo_data(
+            data=data,
+            policial_obj=policial_obj,
+            requires_policial=requires_policial,
+            depto_informado=depto_informado,
+            lotacao_informada=lotacao_informada,
+        )
+
         # Popula campos denormalizados a partir do item, se não forem providos
         data["item_desc"] = data.get("item_desc") or item.descricao
         data["categoria"] = data.get("categoria") or item.categoria
@@ -349,8 +473,8 @@ class Cautela(TimestampedModel):
             item=item,
             arma=getattr(item, "arma_detalhe", None),
             patrimonio_ref=(getattr(item, "arma_detalhe", None).patrimonio if getattr(item, "arma_detalhe", None) else None),
-            departamento_ref=policial_obj.departamento_ref,
-            delegacia_ref=policial_obj.delegacia_ref,
+            departamento_ref=departamento_ref,
+            delegacia_ref=delegacia_ref,
             item_desc=cautela.item_desc,
             categoria=cautela.categoria,
             qtd=cautela.qtd,
@@ -383,12 +507,17 @@ class Cautela(TimestampedModel):
         self.save(update_fields=["data_dev", "status", "condicao_dev", "obs_dev", "atualizado_em"])
 
         # Cria o movimento de devolução
+        departamento_ref = self.policial.departamento_ref if self.policial else None
+        delegacia_ref = self.policial.delegacia_ref if self.policial else None
+        if not departamento_ref and not delegacia_ref:
+            departamento_ref, delegacia_ref = self._resolve_lotacao_refs(self.depto, self.lotacao)
+
         Movimento.objects.create(
             data=data_dev, tipo="Entrada (Devolucao)", item=item,
             arma=getattr(item, "arma_detalhe", None),
             patrimonio_ref=(getattr(item, "arma_detalhe", None).patrimonio if getattr(item, "arma_detalhe", None) else None),
-            departamento_ref=self.policial.departamento_ref,
-            delegacia_ref=self.policial.delegacia_ref,
+            departamento_ref=departamento_ref,
+            delegacia_ref=delegacia_ref,
             item_desc=self.item_desc,
             categoria=self.categoria, qtd=self.qtd, serie=self.serie, policial=self.policial_nome,
             matricula=self.matricula, lotacao=self.lotacao, num_cautela=self.numero, obs=obs_dev,

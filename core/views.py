@@ -1,16 +1,29 @@
-from io import StringIO
+from io import BytesIO, StringIO
+import re
+import unicodedata
+from datetime import date, datetime
 
 from django.core.management import call_command
+from django.db.models import Q, Sum
+from django.http import HttpResponse
 from rest_framework import status, viewsets
 from rest_framework.authentication import BasicAuthentication, SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from docx import Document
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import cm
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from openpyxl import Workbook
 
 from .models import (
     Arma,
     Cautela,
+    Compra,
     Delegacia,
     Departamento,
     Fornecedor,
@@ -22,10 +35,12 @@ from .models import (
     Policial,
     Servico,
     UsuarioSistema,
+    ITEM_STATUS_DISPONIVEL,
 )
 from .serializers import (
     ArmaSerializer,
     CautelaSerializer,
+    CompraSerializer,
     DelegaciaSerializer,
     DepartamentoSerializer,
     FornecedorSerializer,
@@ -45,11 +60,34 @@ class BaseViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
+
         for query_param, model_field in self.filter_map.items():
             value = self.request.query_params.get(query_param)
-            if value:
-                qs = qs.filter(**{model_field: value})
+
+            if value is None or value == "":
+                continue
+
+            # Converte strings para boolean
+            if isinstance(value, str):
+                if value.lower() == "true":
+                    value = True
+                elif value.lower() == "false":
+                    value = False
+
+            qs = qs.filter(**{model_field: value})
+
         return qs
+
+
+def normalize_text(value):
+    text = (value or "").strip().lower()
+    if not text:
+        return ""
+    text = unicodedata.normalize("NFKD", text)
+    return "".join(ch for ch in text if not unicodedata.combining(ch))
+
+
+DEFAULT_PLACEHOLDER = "Não informado"
 
 
 class LotacaoViewSet(BaseViewSet):
@@ -91,6 +129,32 @@ class PolicialViewSet(BaseViewSet):
     ordering_fields = ["matricula", "nome", "depto", "lotacao", "criado_em"]
     filter_map = {"depto": "depto", "lotacao": "lotacao"}
 
+    @staticmethod
+    def _sync_lotacao(policial):
+        depto = (policial.depto or "").strip()
+        lotacao_nome = (policial.lotacao or "").strip()
+        if not depto or not lotacao_nome:
+            return
+
+        Lotacao.objects.get_or_create(
+            depto=depto,
+            nome=lotacao_nome,
+            defaults={
+                "cidade": "N/D",
+                "resp": "",
+                "tel": "",
+                "end": "",
+            },
+        )
+
+    def perform_create(self, serializer):
+        policial = serializer.save()
+        self._sync_lotacao(policial)
+
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        self._sync_lotacao(serializer.instance)
+
 
 class FornecedorViewSet(BaseViewSet):
     queryset = Fornecedor.objects.all()
@@ -99,12 +163,252 @@ class FornecedorViewSet(BaseViewSet):
     ordering_fields = ["nome", "categoria", "criado_em"]
 
 
+class CompraViewSet(BaseViewSet):
+    queryset = Compra.objects.select_related("fornecedor").all()
+    serializer_class = CompraSerializer
+    search_fields = ["descricao", "categoria", "marca", "modelo", "serie", "status", "fornecedor__nome"]
+    ordering_fields = ["dt_aq", "valor_compra", "categoria", "criado_em"]
+    filter_map = {"categoria": "categoria", "status": "status", "fornecedor": "fornecedor_id"}
+
+    @staticmethod
+    def _normalize_quantidades(compra):
+        qtd_total = max(int(compra.qtd_total or 1), 1)
+        qtd_disp = int(compra.qtd_disp if compra.qtd_disp is not None else qtd_total)
+        qtd_disp = max(0, min(qtd_disp, qtd_total))
+        qtd_min = max(int(compra.qtd_min or 1), 0)
+        return qtd_total, qtd_disp, qtd_min
+
+    @staticmethod
+    def _is_categoria_armas(categoria):
+        return (str(categoria or "").strip().lower() == "armas")
+
+    @staticmethod
+    def _normalize_serie_text(value):
+        return str(value or "").replace(" ", "").upper()
+
+    @classmethod
+    def _create_arma_detalhe(cls, compra, item, serie):
+        if not cls._is_categoria_armas(compra.categoria):
+            return None
+
+        serie_norm = cls._normalize_serie_text(serie)
+
+        return Arma.objects.create(
+            item=item,
+            tipo=compra.tipo,
+            marca=compra.marca,
+            modelo=compra.modelo,
+            calibre=compra.calibre,
+            comprimento_cano=compra.comprimento_cano,
+            quantidade_carregadores=int(compra.quantidade_carregadores or 0),
+            capacidade=int(compra.capacidade or 0),
+            numero_serie=serie_norm,
+        )
+
+    @classmethod
+    def _create_item_lote(cls, compra, qtd_total, qtd_disp, qtd_min):
+        serie_norm = cls._normalize_serie_text(compra.serie)
+        item = Item.objects.create(
+            categoria=compra.categoria,
+            marca=compra.marca,
+            descricao=compra.descricao,
+            serie=serie_norm,
+            qtd_total=qtd_total,
+            qtd_disp=qtd_disp,
+            qtd_min=qtd_min,
+            status=ITEM_STATUS_DISPONIVEL,
+            fornecedor=compra.fornecedor,
+            dt_aq=compra.dt_aq,
+            valor_compra=compra.valor_compra,
+            dt_val=compra.dt_val,
+            obs=compra.obs,
+        )
+        cls._create_arma_detalhe(compra, item, serie_norm)
+        return item
+
+    @staticmethod
+    def _validate_unidades(unidades, qtd_total):
+        if not isinstance(unidades, list) or len(unidades) != qtd_total:
+            return "Envie uma lista de unidades com a mesma quantidade da compra."
+
+        for unidade in unidades:
+            if not isinstance(unidade, dict):
+                return "Formato invalido para unidades."
+
+            serie = str(unidade.get("serie") or "").strip()
+            patrimonio = str(unidade.get("patrimonio") or "").strip()
+            if not serie and not patrimonio:
+                return "Cada unidade deve ter ao menos serie ou numero de tombo."
+
+        return ""
+
+    @classmethod
+    def _create_items_unidades(cls, compra, unidades):
+        created_items = []
+        for unidade in unidades:
+            serie = cls._normalize_serie_text(unidade.get("serie"))
+            patrimonio = str(unidade.get("patrimonio") or "").strip()
+            item = Item.objects.create(
+                categoria=compra.categoria,
+                patrimonio=patrimonio,
+                marca=compra.marca,
+                descricao=compra.descricao,
+                serie=serie,
+                qtd_total=1,
+                qtd_disp=1,
+                qtd_min=0,
+                status=ITEM_STATUS_DISPONIVEL,
+                fornecedor=compra.fornecedor,
+                dt_aq=compra.dt_aq,
+                valor_compra=compra.valor_compra,
+                dt_val=compra.dt_val,
+                obs=compra.obs,
+            )
+            cls._create_arma_detalhe(compra, item, serie)
+            created_items.append(item)
+        return created_items
+
+    @action(detail=True, methods=["post"], url_path="lancar-inventario")
+    def lancar_inventario(self, request, pk=None):
+        compra = self.get_object()
+        status_norm = (compra.status or "").strip().lower()
+        if "lanc" in status_norm:
+            return Response({"detail": "Esta compra ja foi lancada no inventario."}, status=status.HTTP_400_BAD_REQUEST)
+
+        categoria_norm = (compra.categoria or "").strip().lower()
+        is_uniforme = categoria_norm == "uniformes"
+        usar_unidades = bool(request.data.get("usar_unidades", False)) and not is_uniforme
+        unidades = request.data.get("unidades") or []
+
+        qtd_total, qtd_disp, qtd_min = self._normalize_quantidades(compra)
+
+        if usar_unidades:
+            validation_error = self._validate_unidades(unidades, qtd_total)
+            if validation_error:
+                return Response({"detail": validation_error}, status=status.HTTP_400_BAD_REQUEST)
+            created_items = self._create_items_unidades(compra, unidades)
+        else:
+            created_items = [self._create_item_lote(compra, qtd_total, qtd_disp, qtd_min)]
+
+        compra.status = "Lancada no Inventario"
+        compra.save(update_fields=["status", "atualizado_em"])
+
+        return Response(
+            {
+                "status": "ok",
+                "compra_id": compra.id,
+                "item_id": created_items[0].id,
+                "item_ids": [item.id for item in created_items],
+                "itens_criados": len(created_items),
+                "detail": "Compra lancada no inventario com sucesso.",
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
 class ItemViewSet(BaseViewSet):
     queryset = Item.objects.select_related("fornecedor").all()
     serializer_class = ItemSerializer
     search_fields = ["patrimonio", "descricao", "categoria", "marca", "serie", "status"]
     ordering_fields = ["descricao", "categoria", "qtd_total", "qtd_disp", "criado_em"]
     filter_map = {"categoria": "categoria", "status": "status"}
+
+    @staticmethod
+    def _inventario_headers():
+        return [
+            "ID",
+            "Descricao",
+            "Categoria",
+            "Marca",
+            "Serie",
+            "Patrimonio",
+            "Quantidade Total",
+            "Quantidade Disponivel",
+            "Quantidade Minima",
+            "Status",
+            "Fornecedor",
+            "Data Aquisicao",
+            "Data Validade",
+            "Observacoes",
+        ]
+
+    @staticmethod
+    def _inventario_row(item):
+        return [
+            item.id,
+            item.descricao or "",
+            item.categoria or "",
+            item.marca or "",
+            item.serie or "",
+            item.patrimonio or "",
+            item.qtd_total or 0,
+            item.qtd_disp or 0,
+            item.qtd_min or 0,
+            item.status or "",
+            item.fornecedor.nome if item.fornecedor else "",
+            item.dt_aq.isoformat() if item.dt_aq else "",
+            item.dt_val.isoformat() if item.dt_val else "",
+            item.obs or "",
+        ]
+
+    @staticmethod
+    def _apply_inventario_filters(queryset, categoria, status_filtro, search):
+        qs = queryset
+        if categoria:
+            # Se a categoria for 'Armas', busca por 'Arma*' para incluir variações.
+            if categoria.lower() == 'armas':
+                qs = qs.filter(categoria__istartswith='arma')
+            else:
+                qs = qs.filter(categoria__icontains=categoria)
+        if status_filtro:
+            qs = qs.filter(status__iexact=status_filtro)
+        if search:
+            qs = qs.filter(
+                Q(descricao__icontains=search)
+                | Q(categoria__icontains=search)
+                | Q(marca__icontains=search)
+                | Q(serie__icontains=search)
+                | Q(patrimonio__icontains=search)
+                | Q(status__icontains=search)
+                | Q(fornecedor__nome__icontains=search)
+            )
+        return qs
+
+    @action(detail=False, methods=["get"], url_path="relatorio-xlsx")
+    def relatorio_xlsx(self, request):
+        base_qs = Item.objects.select_related("fornecedor").all().order_by("categoria", "descricao", "serie")
+
+        categoria = (request.query_params.get("categoria") or "").strip()
+        status_filtro = (request.query_params.get("status") or "").strip()
+        search = (request.query_params.get("search") or "").strip()
+        qs = self._apply_inventario_filters(base_qs, categoria, status_filtro, search)
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Inventario"
+        ws.append(self._inventario_headers())
+
+        has_rows = False
+        for item in qs.iterator():
+            ws.append(self._inventario_row(item))
+            has_rows = True
+
+        if not has_rows:
+            ws.append(["Sem registros para os filtros informados."])
+        else:
+            ws.auto_filter.ref = ws.dimensions
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        filename = f"relatorio_inventario_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        response = HttpResponse(
+            output.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
 
 
 class PatrimonioViewSet(BaseViewSet):
@@ -147,19 +451,28 @@ class ServicoViewSet(BaseViewSet):
         return Response({"codigo": Servico.get_next_code()})
 
     def perform_create(self, serializer):
-        policial = serializer.validated_data.get("policial")
-        if policial:
-            serializer.save(
-                matricula=policial.matricula,
-                policial_nome=policial.nome,
-                depto=policial.depto,
-                lotacao=policial.lotacao,
-            )
-        else:
-            serializer.save()
+        # Extrai o objeto policial dos dados validados.
+        # O `pop` remove o campo para que não seja passado diretamente para o `Servico`.
+        policial = serializer.validated_data.pop("policial", None)
+
+        # Prepara um dicionário com os dados do policial, se ele existir.
+        extra_data = {}
+        if policial and isinstance(policial, Policial):
+            extra_data["matricula"] = policial.matricula
+            extra_data["policial_nome"] = policial.nome
+            extra_data["depto"] = policial.depto
+            extra_data["lotacao"] = policial.lotacao
+
+        serializer.save(**extra_data)
 
 class CautelaViewSet(BaseViewSet):
-    queryset = Cautela.objects.select_related("item").all()
+    queryset = Cautela.objects.select_related(
+        "policial",
+        "item",
+        "item__fornecedor",
+        "item__arma_detalhe",
+        "item__arma_detalhe__patrimonio",
+    ).all()
     serializer_class = CautelaSerializer
     search_fields = [
         "numero",
@@ -173,6 +486,256 @@ class CautelaViewSet(BaseViewSet):
     ]
     ordering_fields = ["numero", "data_saida", "status", "criado_em"]
     filter_map = {"status": "status", "categoria": "categoria", "lotacao": "lotacao"}
+
+    @staticmethod
+    def _destinatario_label(cautela):
+        return "Pessoal" if str(cautela.matricula or "").strip() else "Unidade"
+
+    @staticmethod
+    def _fortaleza_data_text():
+        now = datetime.now()
+        weekdays = [
+            "segunda-feira",
+            "terca-feira",
+            "quarta-feira",
+            "quinta-feira",
+            "sexta-feira",
+            "sabado",
+            "domingo",
+        ]
+        months = [
+            "janeiro",
+            "fevereiro",
+            "marco",
+            "abril",
+            "maio",
+            "junho",
+            "julho",
+            "agosto",
+            "setembro",
+            "outubro",
+            "novembro",
+            "dezembro",
+        ]
+        return f"Fortaleza, {now.day} ({weekdays[now.weekday()]}) de {months[now.month - 1]} de {now.year}."
+
+    @classmethod
+    def _termos_responsabilidade(cls):
+        return [
+            "O(A) servidor(a) identificado(a) neste termo declara ter recebido o(s) material(is) descrito(s) acima em perfeito estado de conservacao e funcionamento, comprometendo-se a utiliza-lo(s) exclusivamente em atividades do servico, cabendo ainda:",
+            "1. Zelar pela sua integridade, economia e conservacao dos bens do Estado, especialmente daqueles que lhes sejam entregues para guarda ou utilizacao (Art. 100, §2º, da Lei nº 12.124, de 06 de julho de 1993);",
+            "2. Nao exibir desnecessariamente arma, distintivo ou algemas (Art. 103, item A, §4º, da Lei nº 12.124, de 06 de julho de 1993)",
+            "3. Comunicar imediatamente qualquer ocorrencia envolvendo armamento sob sua responsabilidade, inclusive registrando boletim de ocorrencia",
+            "4. Devolver, no dia da exoneracao ou demissao, ou quando solicitado pelo setor responsavel, os objetos pertencentes ao Estado que lhes foram entregues para sua guarda ou utilizacao (Art. 163, §1º, da Lei nº 12.124, de 06 de julho de 1993) nas condicoes em que o(s) recebeu.",
+            "5. Devolver a arma quando do afastamento para aposentadoria (Provimento Correcional nº 02/2012 - CGD).",
+            "Declaro para os devidos fins que detenho conhecimento tecnico para o manuseio do referido armamento.",
+            cls._fortaleza_data_text(),
+        ]
+
+    @staticmethod
+    def _word_rows(cautela):
+        def safe(value):
+            return "" if value is None else str(value)
+
+        item = cautela.item
+        arma = getattr(item, "arma_detalhe", None)
+        patrimonio = getattr(arma, "patrimonio", None) if arma else None
+        fornecedor = getattr(item, "fornecedor", None)
+        item_nome = cautela.item_desc if cautela.item_desc else getattr(item, "descricao", "")
+        destinatario = CautelaViewSet._destinatario_label(cautela)
+        emitido_em = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+
+        return [
+            ("Emitido em", emitido_em),
+            ("Numero", safe(cautela.numero)),
+            ("Status", safe(cautela.status)),
+            ("Data de Saida", safe(cautela.data_saida)),
+            ("Previsao de Devolucao", safe(cautela.data_prev)),
+            ("Data de Devolucao", safe(cautela.data_dev)),
+            ("Destinatario", destinatario),
+            ("Policial", safe(cautela.policial_nome)),
+            ("Matricula", safe(cautela.matricula)),
+            ("Departamento", safe(cautela.depto)),
+            ("Lotacao", safe(cautela.lotacao)),
+            ("Item", safe(item_nome)),
+            ("Categoria", safe(cautela.categoria)),
+            ("Serie/Patrimonio", safe(cautela.serie)),
+            ("Quantidade", safe(cautela.qtd)),
+            ("Patrimonio (Item)", safe(getattr(item, "patrimonio", ""))),
+            ("Marca (Item)", safe(getattr(item, "marca", ""))),
+            ("Serie (Item)", safe(getattr(item, "serie", ""))),
+            ("Data Aquisicao", safe(getattr(item, "dt_aq", ""))),
+            ("Data Validade", safe(getattr(item, "dt_val", ""))),
+            ("Valor Compra", safe(getattr(item, "valor_compra", ""))),
+            ("Fornecedor", safe(getattr(fornecedor, "nome", ""))),
+            ("Tipo da Arma", safe(getattr(arma, "tipo", ""))),
+            ("Marca da Arma", safe(getattr(arma, "marca", ""))),
+            ("Modelo da Arma", safe(getattr(arma, "modelo", ""))),
+            ("Calibre", safe(getattr(arma, "calibre", ""))),
+            ("Comprimento do Cano", safe(getattr(arma, "comprimento_cano", ""))),
+            ("Capacidade", safe(getattr(arma, "capacidade", ""))),
+            ("Qtd. Carregadores", safe(getattr(arma, "quantidade_carregadores", ""))),
+            ("Numero de Serie da Arma", safe(getattr(arma, "numero_serie", ""))),
+            ("Tombo Patrimonial", safe(getattr(patrimonio, "codigo", ""))),
+            ("Observacoes", safe(cautela.obs)),
+            ("Condicao na Devolucao", safe(cautela.condicao_dev)),
+            ("Obs. Devolucao", safe(cautela.obs_dev)),
+        ]
+
+    @staticmethod
+    def _render_word_document(rows):
+        document = Document()
+        document.add_heading("Cautela de Armamento", level=1)
+        table = document.add_table(rows=0, cols=2)
+        for label, value in rows:
+            row_cells = table.add_row().cells
+            row_cells[0].text = str(label)
+            row_cells[1].text = str(value)
+
+        document.add_paragraph("")
+        document.add_heading("4. Termos e Responsabilidade", level=2)
+        for texto in CautelaViewSet._termos_responsabilidade():
+            document.add_paragraph(texto)
+        document.add_paragraph("")
+        document.add_paragraph("_______________________________")
+        document.add_paragraph("Recebedor(a)")
+        document.add_paragraph("")
+        document.add_paragraph("_______________________________")
+        document.add_paragraph("Entregador(a)")
+        return document
+
+    @staticmethod
+    def _word_filename(cautela):
+        safe_number = re.sub(r"[^A-Za-z0-9_-]", "_", cautela.numero or f"cautela_{cautela.id}")
+        return f"cautela_{safe_number}.docx"
+
+    @staticmethod
+    def _pdf_filename(cautela):
+        safe_number = re.sub(r"[^A-Za-z0-9_-]", "_", cautela.numero or f"cautela_{cautela.id}")
+        return f"cautela_{safe_number}.pdf"
+
+    @staticmethod
+    def _pdf_safe(value):
+        if value is None:
+            return ""
+        return str(value)
+
+    @classmethod
+    def _build_pdf_document(cls, cautela):
+        item = cautela.item
+        arma = getattr(item, "arma_detalhe", None)
+        patrimonio = getattr(arma, "patrimonio", None) if arma else None
+        fornecedor = getattr(item, "fornecedor", None)
+        policial = cautela.policial
+        destinatario = cls._destinatario_label(cautela)
+
+        styles = getSampleStyleSheet()
+        output = BytesIO()
+        doc = SimpleDocTemplate(
+            output,
+            pagesize=A4,
+            leftMargin=1.5 * cm,
+            rightMargin=1.5 * cm,
+            topMargin=1.5 * cm,
+            bottomMargin=1.5 * cm,
+        )
+
+        story = [
+            Paragraph("TERMO DE CAUTELA", styles["Title"]),
+            Spacer(1, 0.4 * cm),
+            Paragraph(f"Numero: {cls._pdf_safe(cautela.numero)}", styles["Normal"]),
+            Paragraph(f"Emitido em: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}", styles["Normal"]),
+            Spacer(1, 0.35 * cm),
+            Paragraph("Dados da Cautela", styles["Heading3"]),
+        ]
+
+        dados_cautela = [
+            ["Campo", "Valor"],
+            ["Status", cls._pdf_safe(cautela.status)],
+            ["Data de Saida", cls._pdf_safe(cautela.data_saida)],
+            ["Previsao de Devolucao", cls._pdf_safe(cautela.data_prev) or "Sem prazo definido"],
+            ["Data de Devolucao", cls._pdf_safe(cautela.data_dev)],
+            ["Destinatario", destinatario],
+            ["Departamento", cls._pdf_safe(cautela.depto)],
+            ["Lotacao", cls._pdf_safe(cautela.lotacao)],
+            ["Observacoes", cls._pdf_safe(cautela.obs)],
+        ]
+
+        tabela_cautela = Table(dados_cautela, colWidths=[5.0 * cm, 12.0 * cm])
+        tabela_cautela.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("GRID", (0, 0), (-1, -1), 0.7, colors.black),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.extend([tabela_cautela, Spacer(1, 0.35 * cm), Paragraph("Dados do Policial", styles["Heading3"])])
+
+        dados_policial = [
+            ["Campo", "Valor"],
+            ["Nome", cls._pdf_safe(cautela.policial_nome)],
+            ["Cargo", cls._pdf_safe(getattr(policial, "cargo", ""))],
+            ["E-mail", cls._pdf_safe(getattr(policial, "email", ""))],
+            ["Lotacao", cls._pdf_safe(cautela.lotacao)],
+            ["Matricula", cls._pdf_safe(cautela.matricula)],
+        ]
+        tabela_policial = Table(dados_policial, colWidths=[5.0 * cm, 12.0 * cm])
+        tabela_policial.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("GRID", (0, 0), (-1, -1), 0.7, colors.black),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.extend([tabela_policial, Spacer(1, 0.35 * cm), Paragraph("Dados do Material", styles["Heading3"])])
+
+        dados_material = [
+            ["Campo", "Valor"],
+            ["Item", cls._pdf_safe(cautela.item_desc or item.descricao)],
+            ["Categoria", cls._pdf_safe(cautela.categoria)],
+            ["Quantidade", cls._pdf_safe(cautela.qtd)],
+            ["Serie/Patrimonio", cls._pdf_safe(cautela.serie)],
+            ["Fornecedor", cls._pdf_safe(getattr(fornecedor, "nome", ""))],
+            ["Tipo da Arma", cls._pdf_safe(getattr(arma, "tipo", ""))],
+            ["Marca", cls._pdf_safe(getattr(arma, "marca", "") or getattr(item, "marca", ""))],
+            ["Modelo", cls._pdf_safe(getattr(arma, "modelo", ""))],
+            ["Calibre", cls._pdf_safe(getattr(arma, "calibre", ""))],
+            ["Comprimento do Cano", cls._pdf_safe(getattr(arma, "comprimento_cano", ""))],
+            ["Capacidade", cls._pdf_safe(getattr(arma, "capacidade", ""))],
+            ["Qtd. Carregadores", cls._pdf_safe(getattr(arma, "quantidade_carregadores", ""))],
+            ["Numero de Serie da Arma", cls._pdf_safe(getattr(arma, "numero_serie", ""))],
+            ["Tombo Patrimonial", cls._pdf_safe(getattr(patrimonio, "codigo", ""))],
+        ]
+        tabela_material = Table(dados_material, colWidths=[5.0 * cm, 12.0 * cm])
+        tabela_material.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("GRID", (0, 0), (-1, -1), 0.7, colors.black),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.extend([tabela_material, Spacer(1, 0.4 * cm)])
+
+        story.append(Paragraph("4. Termos e Responsabilidade", styles["Heading3"]))
+        for texto in cls._termos_responsabilidade():
+            story.append(Paragraph(texto, styles["Normal"]))
+            story.append(Spacer(1, 0.15 * cm))
+
+        story.extend([
+            Spacer(1, 0.5 * cm),
+            Paragraph("_______________________________", styles["Normal"]),
+            Paragraph("Recebedor(a)", styles["Normal"]),
+            Spacer(1, 0.6 * cm),
+            Paragraph("_______________________________", styles["Normal"]),
+            Paragraph("Entregador(a)", styles["Normal"]),
+        ])
+
+        doc.build(story)
+        output.seek(0)
+        return output
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -199,11 +762,16 @@ class CautelaViewSet(BaseViewSet):
         from datetime import datetime
 
         year = str(datetime.now().year)
-        last = Cautela.objects.filter(numero__startswith=f"CAU-{year}-").order_by("-numero").first()
+        last_number = (
+            Cautela.objects.filter(numero__startswith=f"CAU-{year}-")
+            .order_by("-numero")
+            .values_list("numero", flat=True)
+            .first()
+        )
         next_num = 1
-        if last:
+        if last_number:
             try:
-                next_num = int(last.numero.split("-")[-1]) + 1
+                next_num = int(last_number.split("-")[-1]) + 1
             except (ValueError, IndexError):
                 next_num = 1
         return Response({"numero": f"CAU-{year}-{str(next_num).zfill(4)}"})
@@ -229,6 +797,162 @@ class CautelaViewSet(BaseViewSet):
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(self.get_serializer(cautela).data)
+
+    @action(detail=True, methods=["get"], url_path="documento-word")
+    def documento_word(self, request, pk=None):
+        cautela = self.get_object()
+        rows = self._word_rows(cautela)
+        document = self._render_word_document(rows)
+        filename = self._word_filename(cautela)
+
+        output = BytesIO()
+        document.save(output)
+        output.seek(0)
+
+        response = HttpResponse(
+            output.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+    @action(detail=True, methods=["get"], url_path="documento-pdf")
+    def documento_pdf(self, request, pk=None):
+        cautela = self.get_object()
+        filename = self._pdf_filename(cautela)
+        output = self._build_pdf_document(cautela)
+
+        response = HttpResponse(output.getvalue(), content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+    @staticmethod
+    def _xlsx_headers():
+        return [
+            "Numero",
+            "Data Saida",
+            "Data Prevista",
+            "Data Devolucao",
+            "Status",
+            "Destinatario",
+            "Policial",
+            "Matricula",
+            "Departamento",
+            "Lotacao",
+            "Item",
+            "Categoria",
+            "Tipo",
+            "Numero de Serie",
+            "Quantidade",
+            "Observacoes",
+        ]
+
+    def _xlsx_row(self, cautela):
+        destinatario = self._destinatario_label(cautela)
+        tipo_arma = ""
+        if (cautela.categoria or "").lower() == "armas":
+            arma_detalhe = getattr(cautela.item, "arma_detalhe", None)
+            if arma_detalhe:
+                tipo_arma = arma_detalhe.tipo or ""
+        return [
+            cautela.numero or "",
+            cautela.data_saida.isoformat() if cautela.data_saida else "",
+            cautela.data_prev.isoformat() if cautela.data_prev else "",
+            cautela.data_dev.isoformat() if cautela.data_dev else "",
+            cautela.status or "",
+            destinatario,
+            cautela.policial_nome or "",
+            cautela.matricula or "",
+            cautela.depto or "",
+            cautela.lotacao or "",
+            cautela.item_desc or (cautela.item.descricao if cautela.item else ""),
+            cautela.categoria or "",
+            tipo_arma,
+            cautela.serie or "",
+            cautela.qtd or 0,
+            cautela.obs or "",
+        ]
+
+    @staticmethod
+    def _apply_xlsx_filters(queryset, categoria, status_filtro, search):
+        qs = queryset
+        if categoria:
+            categoria_norm = str(categoria).strip().lower()
+            if categoria_norm.startswith("arma"):
+                qs = qs.filter(categoria__icontains="arma")
+            else:
+                qs = qs.filter(Q(categoria__iexact=categoria) | Q(categoria__icontains=categoria))
+        if status_filtro:
+            qs = qs.filter(status__iexact=status_filtro)
+        if search:
+            qs = qs.filter(
+                Q(numero__icontains=search)
+                | Q(policial_nome__icontains=search)
+                | Q(matricula__icontains=search)
+                | Q(depto__icontains=search)
+                | Q(lotacao__icontains=search)
+                | Q(item_desc__icontains=search)
+                | Q(categoria__icontains=search)
+                | Q(serie__icontains=search)
+            )
+        return qs
+
+    @action(detail=False, methods=["get"], url_path="relatorio-xlsx")
+    def relatorio_xlsx(self, request):
+        base_qs = (
+            Cautela.objects.select_related("item", "item__arma_detalhe")
+            .all()
+            .order_by("-data_saida", "-criado_em")
+        )
+
+        categoria = (request.query_params.get("categoria") or "").strip()
+        status_filtro = (request.query_params.get("status") or "").strip()
+        search = (request.query_params.get("search") or "").strip()
+        qs = self._apply_xlsx_filters(base_qs, categoria, status_filtro, search)
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Cautelas"
+        ws.append(self._xlsx_headers())
+
+        has_rows = False
+        for c in qs.iterator():
+            ws.append(self._xlsx_row(c))
+            has_rows = True
+
+        if not has_rows:
+            ws.append([
+                "Sem registros para os filtros informados.",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+            ])
+        else:
+            ws.auto_filter.ref = ws.dimensions
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        filename = f"relatorio_cautelas_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        response = HttpResponse(
+            output.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
 
 
 class MovimentoViewSet(BaseViewSet):
@@ -262,6 +986,184 @@ class OpcaoMenuViewSet(BaseViewSet):
             grupos = self.request.query_params.get("grupo").split(",")
             qs = qs.filter(grupo__in=grupos)
         return qs
+
+
+class DashboardEstoqueResumoView(APIView):
+    @staticmethod
+    def _build_locais():
+        return [
+            {
+                "departamento": lot["depto"] or "",
+                "delegacia": lot["nome"] or "",
+                "seccional": lot["cidade"] or "",
+            }
+            for lot in Lotacao.objects.values("depto", "nome", "cidade").order_by("depto", "nome")
+        ]
+
+    @staticmethod
+    def _build_categorias():
+        return list(Item.objects.values_list("categoria", flat=True).distinct().order_by("categoria"))
+
+    @staticmethod
+    def _build_totais(itens_base):
+        totais = itens_base.aggregate(total=Sum("qtd_total"), disp=Sum("qtd_disp"))
+        return {
+            "total": int(totais["total"] or 0),
+            "disp": int(totais["disp"] or 0),
+            "registros_itens": itens_base.count(),
+        }
+
+    @staticmethod
+    def _build_ranked_totals(itens_base, field_name):
+        return [
+            [row[field_name] or DEFAULT_PLACEHOLDER, int(row["total"] or 0)]
+            for row in itens_base.values(field_name).annotate(total=Sum("qtd_total")).order_by("-total", field_name)[:8]
+        ]
+
+    @staticmethod
+    def _build_validade(itens_base):
+        hoje = date.today()
+        qtd_vencidos = 0
+        qtd_vence30 = 0
+        qtd_vence60 = 0
+        qtd_sem_validade = 0
+        itens_criticos = []
+        por_ano = {}
+
+        for item in itens_base.values("id", "descricao", "categoria", "dt_val", "qtd_total", "qtd_disp"):
+            qtd_base = int(item["qtd_disp"] if item["qtd_disp"] is not None else item["qtd_total"] or 0)
+            dt_val = item["dt_val"]
+
+            if not dt_val:
+                qtd_sem_validade += qtd_base
+                continue
+
+            ano = dt_val.year
+            por_ano[ano] = por_ano.get(ano, 0) + qtd_base
+
+            dias_para_vencer = (dt_val - hoje).days
+            situacao = "Dentro da validade"
+
+            if dias_para_vencer < 0:
+                situacao = "Vencido"
+                qtd_vencidos += qtd_base
+            elif dias_para_vencer <= 365:
+                situacao = "Vence em ate 1 ano"
+                qtd_vence30 += qtd_base
+            elif dias_para_vencer <= 730:
+                situacao = "Vence em ate 2 anos"
+                qtd_vence60 += qtd_base
+
+            if dias_para_vencer <= 730:
+                itens_criticos.append(
+                    {
+                        "id": item["id"],
+                        "descricao": item["descricao"] or "—",
+                        "categoria": item["categoria"] or DEFAULT_PLACEHOLDER,
+                        "dt_val": dt_val,
+                        "qtd_disp": qtd_base,
+                        "diasParaVencer": dias_para_vencer,
+                        "anosParaVencer": round(dias_para_vencer / 365, 2),
+                        "situacao": situacao,
+                    }
+                )
+
+        itens_criticos.sort(key=lambda item: (item["diasParaVencer"], item["descricao"].lower()))
+        validade_por_ano = [
+            {"ano": ano, "quantidade": int(qtd)}
+            for ano, qtd in sorted(por_ano.items(), key=lambda pair: pair[0], reverse=True)
+        ]
+
+        return {
+            "qtdVencidos": qtd_vencidos,
+            "qtdVence30": qtd_vence30,
+            "qtdVence60": qtd_vence60,
+            "qtdSemValidade": qtd_sem_validade,
+            "itensCriticos": itens_criticos,
+            "porAno": validade_por_ano,
+        }
+
+    @staticmethod
+    def _armas_match_filters(depto_atual, seccional_atual, delegacia_atual, depto, seccional, delegacia):
+        return (
+            (not depto or depto_atual == depto)
+            and (not seccional or seccional_atual == seccional)
+            and (not delegacia or delegacia_atual == delegacia)
+        )
+
+    @staticmethod
+    def _build_armas_por_local(depto, seccional, delegacia):
+        lotacao_map = {
+            (normalize_text(lot["depto"]), normalize_text(lot["nome"])): lot["cidade"] or ""
+            for lot in Lotacao.objects.values("depto", "nome", "cidade")
+        }
+
+        armas_por_local = []
+        armas_qs = Cautela.objects.filter(status=Cautela.STATUS_ATIVA, categoria__iexact="armas")
+        for row in armas_qs.values("depto", "lotacao").annotate(quantidade=Sum("qtd")):
+            depto_atual = row["depto"] or ""
+            delegacia_atual = row["lotacao"] or ""
+            seccional_atual = lotacao_map.get((normalize_text(depto_atual), normalize_text(delegacia_atual)), "")
+
+            if not DashboardEstoqueResumoView._armas_match_filters(
+                depto_atual,
+                seccional_atual,
+                delegacia_atual,
+                depto,
+                seccional,
+                delegacia,
+            ):
+                continue
+
+            armas_por_local.append(
+                {
+                    "departamento": depto_atual or DEFAULT_PLACEHOLDER,
+                    "seccional": seccional_atual or DEFAULT_PLACEHOLDER,
+                    "delegacia": delegacia_atual or DEFAULT_PLACEHOLDER,
+                    "quantidade": int(row["quantidade"] or 0),
+                }
+            )
+
+        armas_por_local.sort(key=lambda item: (-item["quantidade"], item["delegacia"]))
+        return armas_por_local
+
+    def get(self, request):
+        categoria = (request.query_params.get("categoria") or "").strip()
+        depto = (request.query_params.get("depto") or "").strip()
+        seccional = (request.query_params.get("seccional") or "").strip()
+        delegacia = (request.query_params.get("delegacia") or "").strip()
+
+        itens_base = Item.objects.all()
+        if categoria:
+            itens_base = itens_base.filter(categoria=categoria)
+
+        totais = self._build_totais(itens_base)
+        categorias = self._build_categorias()
+        lotacoes = self._build_locais()
+        by_categoria = self._build_ranked_totals(itens_base, "categoria")
+        by_status = self._build_ranked_totals(itens_base, "status")
+        validade = self._build_validade(itens_base)
+
+        cautelas_filtradas = Cautela.objects.filter(status=Cautela.STATUS_ATIVA)
+        if categoria:
+            cautelas_filtradas = cautelas_filtradas.filter(item__categoria=categoria)
+
+        ativas = cautelas_filtradas.count()
+        registros_cautelas = Cautela.objects.count()
+        armas_por_local = self._build_armas_por_local(depto, seccional, delegacia)
+
+        return Response(
+            {
+                "categorias": categorias,
+                "locais": lotacoes,
+                "stats": {**totais, "ativas": ativas, "registros_cautelas": registros_cautelas},
+                "by_categoria": by_categoria,
+                "by_status": by_status,
+                "validade": validade,
+                "armas_por_local": armas_por_local,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class BackfillRelationalRefsView(APIView):

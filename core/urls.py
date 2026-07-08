@@ -4,7 +4,9 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     ArmaViewSet,
     BackfillRelationalRefsView,
+    DashboardEstoqueResumoView,
     CautelaViewSet,
+    CompraViewSet,
     DelegaciaViewSet,
     DepartamentoViewSet,
     FornecedorViewSet,
@@ -25,6 +27,7 @@ router.register("usuarios", UsuarioSistemaViewSet, basename="usuarios")
 router.register("lotacoes", LotacaoViewSet, basename="lotacoes")
 router.register("policiais", PolicialViewSet, basename="policiais")
 router.register("fornecedores", FornecedorViewSet, basename="fornecedores")
+router.register("compras", CompraViewSet, basename="compras")
 router.register("itens", ItemViewSet, basename="itens")
 router.register("armas", ArmaViewSet, basename="armas")
 router.register("patrimonios", PatrimonioViewSet, basename="patrimonios")
@@ -34,6 +37,7 @@ router.register("movimentos", MovimentoViewSet, basename="movimentos")
 router.register("opcoes-menu", OpcaoMenuViewSet, basename="opcoes-menu")
 
 urlpatterns = [
+    path("dashboard/estoque/", DashboardEstoqueResumoView.as_view(), name="dashboard-estoque"),
     path("admin/backfill-relacional/", BackfillRelationalRefsView.as_view(), name="backfill-relacional"),
     path("", include(router.urls)),
 ]
