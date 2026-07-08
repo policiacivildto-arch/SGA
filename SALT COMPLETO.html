@@ -1,0 +1,3937 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SALT · Sistema de Controle de Armas e Estoque — PCCE</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ═══════════════════ TOPBAR ═══════════════════ -->
+<div class="topbar">
+  <div class="topbar-brand">🛡️ SALT <span>·</span> Sistema de Controle de Armas e Estoque <span>— DTO · PCCE</span></div>
+  <div class="topbar-subtitle">Módulo Integrado de Gestão Operacional</div>
+</div>
+
+<div class="app-body">
+
+<!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+<nav class="sidebar">
+  <div class="sidebar-section">Serviços de Armas</div>
+  <div class="sidebar-item active" onclick="navigate('pg-dash-servicos')"><span class="icon">📊</span> Dashboard Serviços</div>
+  <div class="sidebar-item" onclick="navigate('pg-registros')"><span class="icon">📋</span> Registros de Serviço</div>
+  <div class="sidebar-item" onclick="navigate('pg-novo-servico')"><span class="icon">➕</span> Novo Serviço</div>
+  <hr class="sidebar-divider">
+  <div class="sidebar-section">Estoque & Distribuição</div>
+  <div class="sidebar-item" onclick="navigate('pg-dash-estoque')"><span class="icon">📈</span> Dashboard Estoque</div>
+  <div class="sidebar-item" onclick="navigate('pg-cautelas')"><span class="icon">📜</span> Cautelas</div>
+  <div class="sidebar-item" onclick="navigate('pg-relatorios')"><span class="icon">📑</span> Relatórios</div>
+  <hr class="sidebar-divider">
+  <div class="sidebar-section">Cadastros</div>
+  <div class="sidebar-item" onclick="navigate('pg-cad-policiais')"><span class="icon">👮</span> Policiais</div>
+  <div class="sidebar-item" onclick="navigate('pg-cad-lotacao')"><span class="icon">🏢</span> Lotações</div>
+  <div class="sidebar-item" onclick="navigate('pg-cad-itens')"><span class="icon">📦</span> Itens / Inventário</div>
+  <div class="sidebar-item" onclick="navigate('pg-cad-fornecedor')"><span class="icon">🏭</span> Fornecedores</div>
+  <div class="sidebar-item" onclick="navigate('pg-cad-menus')"><span class="icon">🧩</span> Menus Suspensos</div>
+</nav>
+
+<!-- ═══════════════════ MAIN ═══════════════════ -->
+<main class="main">
+
+<!-- ══════════════════════════════════════════
+     PÁGINA: DASHBOARD SERVIÇOS
+══════════════════════════════════════════ -->
+<div id="pg-dash-servicos" class="page active">
+  <div class="page-header flex justify-between items-center">
+    <div>
+      <h1>📊 Dashboard Analítico — Serviços de Armas</h1>
+      <p>Indicadores de manutenção — clique no card para filtrar</p>
+    </div>
+    <div class="flex gap-8">
+      <button class="btn btn-outline btn-sm" onclick="navigate('pg-novo-servico')">➕ Novo Registro</button>
+    </div>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-card" onclick="filterServicos('')"><div class="stat-val" id="ds-total">0</div><div class="stat-label">📁 Total Geral</div></div>
+    <div class="stat-card red" onclick="filterServicos('Aberto')"><div class="stat-val" id="ds-aberto">0</div><div class="stat-label">🔴 Abertos</div></div>
+    <div class="stat-card orange" onclick="filterServicos('Em Andamento')"><div class="stat-val" id="ds-andamento">0</div><div class="stat-label">🟡 Em Andamento</div></div>
+    <div class="stat-card blue" onclick="filterServicos('Aguardando Peça')"><div class="stat-val" id="ds-peca">0</div><div class="stat-label">🔵 Aguard. Peça</div></div>
+    <div class="stat-card purple" onclick="filterServicos('Aguardando Teste')"><div class="stat-val" id="ds-teste">0</div><div class="stat-label">🟣 Aguard. Teste</div></div>
+    <div class="stat-card green" onclick="filterServicos('Concluído')"><div class="stat-val" id="ds-concluido">0</div><div class="stat-label">🟢 Concluídos</div></div>
+  </div>
+  <div class="grid-2">
+    <div class="card"><div class="card-title">👨‍🔧 Serviços por Armeiro</div><div class="chart-bar-wrap" id="chart-armeiro"></div></div>
+    <div class="card"><div class="card-title">⚙️ Tipo de Serviço</div><div class="chart-bar-wrap" id="chart-tipo"></div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">📋 Últimos Registros</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ID</th><th>Data Rec.</th><th>Armeiro</th><th>Tipo</th><th>Policial</th><th>Modelo</th><th>Nº Série</th><th>Status</th></tr></thead>
+        <tbody id="tbody-dash-servicos"><tr><td colspan="8" class="text-center" style="padding:20px;color:#999">Nenhum registro</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     PÁGINA: REGISTROS DE SERVIÇO
+══════════════════════════════════════════ -->
+<div id="pg-registros" class="page">
+  <div class="page-header flex justify-between items-center">
+    <div><h1>📋 Registros de Serviço</h1><p>Gerencie todos os serviços de manutenção de armamento</p></div>
+    <div class="flex gap-8">
+      <button class="btn btn-outline btn-sm" onclick="exportCSV('servicos')">📥 CSV</button>
+      <button class="btn btn-primary btn-sm" onclick="navigate('pg-novo-servico')">➕ Novo</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="search-bar">
+      <input type="text" id="filter-serv-text" placeholder="🔍 Buscar..." oninput="renderServicosTable()">
+      <select id="filter-serv-status" onchange="renderServicosTable()">
+        <option value="">Todos os Status</option>
+        <option>Aberto</option><option>Em Andamento</option><option>Aguardando Peça</option><option>Aguardando Teste</option><option>Concluído</option>
+      </select>
+      <select id="filter-serv-tipo" onchange="renderServicosTable()"><option value="">Todos os Tipos</option></select>
+      <select id="filter-serv-armeiro" onchange="renderServicosTable()"><option value="">Todos os Armeiros</option></select>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th onclick="sortTable('servicos','id')">ID</th>
+          <th onclick="sortTable('servicos','dataRec')">Data Rec.</th>
+          <th onclick="sortTable('servicos','armeiro')">Armeiro</th>
+          <th onclick="sortTable('servicos','tipo')">Tipo</th>
+          <th onclick="sortTable('servicos','matricula')">Matrícula</th>
+          <th onclick="sortTable('servicos','policial')">Policial</th>
+          <th onclick="sortTable('servicos','depto')">Depto.</th>
+          <th onclick="sortTable('servicos','modelo')">Modelo</th>
+          <th onclick="sortTable('servicos','serie')">Nº Série</th>
+          <th onclick="sortTable('servicos','status')">Status</th>
+          <th>Ações</th>
+        </tr></thead>
+        <tbody id="tbody-servicos"><tr><td colspan="11" class="text-center" style="padding:20px;color:#999">Nenhum registro</td></tr></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="pag-servicos"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     PÁGINA: NOVO SERVIÇO
+══════════════════════════════════════════ -->
+<div id="pg-novo-servico" class="page">
+  <div class="page-header"><h1>➕ Novo Registro de Serviço</h1><p>Preencha os dados completos do serviço de armamento</p></div>
+  <div class="card">
+    <div class="alert alert-success" id="alert-servico-ok">✅ Registro salvo com sucesso!</div>
+    <div class="alert alert-danger" id="alert-servico-err">⚠️ Preencha todos os campos obrigatórios.</div>
+    <div class="card-title">📋 Informações do Serviço</div>
+    <div class="form-grid">
+      <div class="form-group"><label>Tipo de Serviço *</label>
+        <select id="ns-tipo">
+          <option value="">Selecione...</option>
+          <option>Manutenção</option><option>Limpeza</option>
+          <option>Reposição de Peça</option><option>Reposição de Arma</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Armeiro Responsável *</label>
+        <select id="ns-armeiro">
+          <option value="">Selecione...</option>
+          <option>Armeiro 1</option><option>Armeiro 2</option><option>Armeiro 3</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Data de Recebimento *</label><input type="date" id="ns-data-rec"></div>
+      <div class="form-group"><label>Data de Devolução</label><input type="date" id="ns-data-dev"></div>
+      <div class="form-group"><label>Status *</label>
+        <select id="ns-status">
+          <option value="">Selecione...</option>
+          <option>Aberto</option><option>Em Andamento</option><option>Aguardando Peça</option><option>Aguardando Teste</option><option>Concluído</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Motivo do Serviço</label>
+        <select id="ns-motivo">
+          <option value="">Selecione...</option>
+          <option>Mau funcionamento</option><option>Dano físico</option><option>Rotina</option><option>Solicitação do policial</option>
+        </select>
+      </div>
+    </div>
+    <div class="card-title mt-16">👮 Dados do Policial</div>
+    <div class="form-grid">
+      <div class="form-group"><label>Matrícula *</label><input type="text" id="ns-matricula" placeholder="Ex.: 123456" oninput="autoFillPolicial('ns')"></div>
+      <div class="form-group"><label>Nome do Policial *</label><input type="text" id="ns-policial" placeholder="Nome completo"></div>
+      <div class="form-group"><label>Departamento *</label>
+        <select id="ns-depto" onchange="updateLotacaoServico()"><option value="">Selecione...</option></select>
+      </div>
+      <div class="form-group"><label>Delegacia / Lotação *</label>
+        <select id="ns-lotacao"><option value="">Selecione o departamento primeiro</option></select>
+      </div>
+    </div>
+    <div class="card-title mt-16">🔫 Dados da Arma</div>
+    <div class="form-grid">
+      <div class="form-group"><label>Modelo da Arma *</label>
+        <select id="ns-modelo">
+          <option value="">Selecione...</option>
+          <option>GLOCK G17</option><option>GLOCK G19</option><option>GLOCK G26</option>
+          <option>SIG SAUER P320</option>
+          <option>TAURUS PT-100</option><option>TAURUS PT-101</option><option>TAURUS PT-640</option>
+          <option>TAURUS PT-840</option><option>TAURUS PT-940</option><option>TAURUS PT-24/7</option>
+          <option>BERETA APX (9mm)</option><option>REVOLVER</option>
+          <option>RADICAL FIREARMS RF 14 5.56</option><option>IMBEL IA2</option><option>BUSHMASTER XM15E25</option>
+          <option>ARMALITE AR10</option><option>HK HKPSG1</option>
+          <option>SIGSAUER MPX (9mm)</option><option>TAURUS CT .40</option><option>TAURUS CTT .40</option>
+          <option>TAURUS SMT .40</option><option>TAURUS MT 9mm</option><option>TAURUS MT .40</option><option>TAURUS MT12 (9mm)</option>
+          <option>HK MP5 (9mm)</option><option>INA MB50 (.45)</option>
+          <option>BENELLI M3A1</option><option>CBC 586</option><option>CBC 151</option><option>CBC 586P</option>
+          <option>BOITO BSA 5T 84</option><option>ROSSI OVERLAND</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Número de Série *</label><input type="text" id="ns-serie" placeholder="Ex.: ABC123456"></div>
+    </div>
+    <div class="card-title mt-16">🔧 Detalhes do Serviço</div>
+    <div class="form-grid">
+      <div class="form-group full"><label>Descrição do Serviço</label><textarea id="ns-descricao" placeholder="Descreva o serviço realizado..."></textarea></div>
+      <div class="form-group full"><label>Peças Substituídas</label><textarea id="ns-pecas" placeholder="Liste as peças substituídas..."></textarea></div>
+    </div>
+    <div class="flex gap-8 mt-16">
+      <button class="btn btn-primary" onclick="salvarServico()">💾 Salvar Registro</button>
+      <button class="btn btn-outline" onclick="limparFormServico()">🗑️ Limpar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     PÁGINA: DASHBOARD ESTOQUE
+══════════════════════════════════════════ -->
+<div id="pg-dash-estoque" class="page">
+  <div class="page-header"><h1>📈 Dashboard Estoque</h1><p>Visão consolidada do inventário e distribuição de itens</p></div>
+  <div class="card">
+    <div class="search-bar">
+      <select id="filter-dash-categoria" onchange="renderDashEstoque()">
+        <option value="">Todas as Categorias</option>
+      </select>
+    </div>
+  </div>
+  <div class="stats-grid" id="stats-estoque-grid"></div>
+  <div class="grid-2">
+    <div class="card"><div class="card-title">📦 Estoque por Categoria</div><div class="chart-bar-wrap" id="chart-cat-estoque"></div></div>
+    <div class="card"><div class="card-title">🏢 Itens Distribuídos por Lotação</div><div class="chart-bar-wrap" id="chart-lot-estoque"></div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">🗓️ Linha do Tempo Anual — Vencimentos</div>
+    <div class="chart-bar-wrap" id="chart-vencimento-anual"></div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">📦 Status dos Itens</div>
+      <ul class="legend-list" id="legend-cautelas"></ul>
+    </div>
+    <div class="card">
+      <div class="card-title">⚠️ Estoque Crítico (abaixo do mínimo)</div>
+      <div class="table-wrap">
+        <table><thead><tr><th>Item</th><th>Categoria</th><th>Disponível</th><th>Mínimo</th></tr></thead>
+        <tbody id="tbody-estoque-critico"></tbody></table>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">🗺️ Itens por Unidade (distribuição atual)</div>
+    <div class="table-wrap">
+      <table><thead><tr><th>Lotação / Unidade</th><th>Qtd. Itens em Cautela</th><th>Policiais Distintos</th><th>Última Movimentação</th></tr></thead>
+      <tbody id="tbody-dist-unidade"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     PÁGINA: CAUTELAS
+══════════════════════════════════════════ -->
+<div id="pg-cautelas" class="page">
+  <div class="page-header flex justify-between items-center">
+    <div><h1>📜 Cautelas</h1><p>Registre entregas e devoluções — gere termos em PDF</p></div>
+    <button class="btn btn-primary" onclick="abrirModalCautela()">➕ Nova Cautela</button>
+  </div>
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('cautelas','abertas',this)">🟡 Abertas</button>
+    <button class="tab-btn" onclick="switchTab('cautelas','historico',this)">📚 Histórico Completo</button>
+  </div>
+  <div id="tab-cautelas-abertas" class="tab-pane active">
+    <div class="card">
+      <div class="search-bar">
+        <input type="text" id="filter-caut-text" placeholder="🔍 Buscar policial, item, lotação..." oninput="renderCautelasTable('abertas')">
+        <select id="filter-caut-cat" onchange="renderCautelasTable('abertas')"><option value="">Todas as categorias</option></select>
+        <select id="filter-caut-lot" onchange="renderCautelasTable('abertas')"><option value="">Todas as lotações</option></select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Nº Cautela</th><th>Data Saída</th><th>Policial</th><th>Matrícula</th>
+            <th>Lotação</th><th>Item</th><th>Categoria</th><th>Qtd</th>
+            <th>Nº Série/Patrimônio</th><th>Prev. Devolução</th><th>Status</th><th>Ações</th>
+          </tr></thead>
+          <tbody id="tbody-cautelas-abertas"><tr><td colspan="12" class="text-center" style="padding:20px;color:#999">Nenhuma cautela aberta</td></tr></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="pag-cautelas-abertas"></div>
+    </div>
+  </div>
+  <div id="tab-cautelas-historico" class="tab-pane">
+    <div class="card">
+      <div class="search-bar">
+        <input type="text" id="filter-hist-text" placeholder="🔍 Buscar..." oninput="renderCautelasTable('historico')">
+        <input type="date" id="filter-hist-de" onchange="renderCautelasTable('historico')">
+        <input type="date" id="filter-hist-ate" onchange="renderCautelasTable('historico')">
+        <button class="btn btn-outline btn-sm" onclick="exportCSV('cautelas')">📥 CSV</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Nº Cautela</th><th>Data Saída</th><th>Data Dev.</th><th>Policial</th>
+            <th>Matrícula</th><th>Lotação</th><th>Item</th><th>Qtd</th><th>Status</th><th>Ações</th>
+          </tr></thead>
+          <tbody id="tbody-cautelas-historico"><tr><td colspan="10" class="text-center" style="padding:20px;color:#999">Nenhum histórico</td></tr></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="pag-cautelas-historico"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     PÁGINA: RELATÓRIOS
+══════════════════════════════════════════ -->
+<div id="pg-relatorios" class="page">
+  <div class="page-header"><h1>📑 Relatórios</h1><p>Consulte histórico de movimentações e gere documentos PDF</p></div>
+  <div class="card">
+    <div class="card-title">🔍 Filtros</div>
+    <div class="form-grid">
+      <div class="form-group"><label>Período — De</label><input type="date" id="rel-de"></div>
+      <div class="form-group"><label>Período — Até</label><input type="date" id="rel-ate"></div>
+      <div class="form-group"><label>Categoria do Item</label>
+        <select id="rel-cat"><option value="">Todas</option></select>
+      </div>
+      <div class="form-group"><label>Tipo de Movimentação</label>
+        <select id="rel-tipo-mov"><option value="">Todas</option><option>Saída (Cautela)</option><option>Entrada (Devolução)</option><option>Entrada (Aquisição)</option></select>
+      </div>
+      <div class="form-group"><label>Policial (Nome ou Matrícula)</label><input type="text" id="rel-policial" placeholder="Buscar..."></div>
+      <div class="form-group"><label>Lotação</label>
+        <select id="rel-lotacao"><option value="">Todas</option></select>
+      </div>
+    </div>
+    <div class="flex gap-8 mt-16">
+      <button class="btn btn-primary" onclick="gerarRelatorio()">🔍 Gerar Relatório</button>
+      <button class="btn btn-success" onclick="exportarRelatorioPDF()">🖨️ Exportar PDF</button>
+      <button class="btn btn-outline btn-sm" onclick="exportCSV('relatorio')">📥 CSV</button>
+    </div>
+  </div>
+  <div class="card" id="card-relatorio" style="display:none">
+    <div class="card-title flex justify-between items-center">
+      <span>📋 Resultado — <span id="rel-count">0</span> registro(s)</span>
+      <button class="btn btn-success btn-sm" onclick="exportarRelatorioPDF()">🖨️ PDF</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Data</th><th>Tipo Mov.</th><th>Item</th><th>Categoria</th><th>Qtd</th>
+          <th>Nº Série/Patrimônio</th><th>Policial</th><th>Matrícula</th>
+          <th>Lotação</th><th>Nº Cautela</th><th>Obs.</th>
+        </tr></thead>
+        <tbody id="tbody-relatorio"><tr><td colspan="11" class="text-center" style="padding:20px;color:#999">Execute o filtro acima</td></tr></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="pag-relatorio"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     PÁGINA: CAD. POLICIAIS
+══════════════════════════════════════════ -->
+<div id="pg-cad-policiais" class="page">
+  <div class="page-header flex justify-between items-center">
+    <div><h1>👮 Cadastro de Policiais</h1><p>Gerencie os policiais cadastrados no sistema</p></div>
+    <button class="btn btn-primary" onclick="abrirModalPolicial()">➕ Novo Policial</button>
+  </div>
+  <div class="card">
+    <div class="search-bar">
+      <input type="text" id="filter-pol-text" placeholder="🔍 Buscar nome ou matrícula..." oninput="renderPoliciaisTable()">
+      <select id="filter-pol-lot" onchange="renderPoliciaisTable()"><option value="">Todas as Lotações</option></select>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th onclick="sortTable('policiais','matricula')">Matrícula</th>
+          <th onclick="sortTable('policiais','nome')">Nome</th>
+          <th onclick="sortTable('policiais','cargo')">Cargo</th>
+          <th onclick="sortTable('policiais','depto')">Departamento</th>
+          <th onclick="sortTable('policiais','lotacao')">Lotação</th>
+          <th onclick="sortTable('policiais','tel')">Telefone</th>
+          <th>Ações</th>
+        </tr></thead>
+        <tbody id="tbody-policiais"><tr><td colspan="7" class="text-center" style="padding:20px;color:#999">Nenhum policial cadastrado</td></tr></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="pag-policiais"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     PÁGINA: CAD. LOTAÇÕES
+══════════════════════════════════════════ -->
+<div id="pg-cad-lotacao" class="page">
+  <div class="page-header flex justify-between items-center">
+    <div><h1>🏢 Cadastro de Lotações</h1><p>Departamentos e unidades da PCCE</p></div>
+    <button class="btn btn-primary" onclick="abrirModalLotacao()">➕ Nova Lotação</button>
+  </div>
+  <div class="card">
+    <div class="search-bar">
+      <input type="text" id="filter-lot-text" placeholder="🔍 Buscar..." oninput="renderLotacoesTable()">
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th onclick="sortTable('lotacoes','depto')">Departamento</th>
+          <th onclick="sortTable('lotacoes','nome')">Nome da Unidade</th>
+          <th onclick="sortTable('lotacoes','cidade')">Cidade</th>
+          <th onclick="sortTable('lotacoes','resp')">Responsável</th>
+          <th>Ações</th>
+        </tr></thead>
+        <tbody id="tbody-lotacoes"><tr><td colspan="5" class="text-center" style="padding:20px;color:#999">Nenhuma lotação cadastrada</td></tr></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="pag-lotacoes"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     PÁGINA: CAD. ITENS
+══════════════════════════════════════════ -->
+<div id="pg-cad-itens" class="page">
+  <div class="page-header flex justify-between items-center">
+    <div><h1>📦 Itens / Inventário</h1><p>Armas, munições, coletes e todos os equipamentos</p></div>
+    <div class="flex gap-8">
+      <button class="btn btn-outline" onclick="baixarModeloPlanilhaItens()">⬇️ Baixar Planilha Modelo</button>
+      <button class="btn btn-outline" onclick="abrirImportacaoPlanilhaItens()">📤 Ler Planilha</button>
+      <button class="btn btn-outline" onclick="abrirImportacaoPdfItens()">📄 Ler PDF</button>
+      <button class="btn btn-primary" onclick="abrirModalItem()">➕ Novo Item</button>
+    </div>
+  </div>
+  <input type="file" id="planilha-itens-input" accept=".csv,text/csv,.txt" style="display:none" onchange="importarPlanilhaItens(event)">
+  <input type="file" id="pdf-itens-input" accept=".pdf,application/pdf" style="display:none" onchange="importarItensPdf(event)">
+  <div class="card">
+    <div class="search-bar">
+      <input type="text" id="filter-item-text" placeholder="🔍 Buscar..." oninput="renderItensTable()">
+      <select id="filter-item-cat" onchange="renderItensTable()"><option value="">Todas as Categorias</option></select>
+      <select id="filter-item-status" onchange="renderItensTable()">
+        <option value="">Todos os Status</option>
+        <option>Disponível</option><option>Em Uso</option><option>Em Reparo</option><option>Inservível</option><option>Extraviado</option><option>Furtado</option>
+      </select>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th onclick="sortTable('itens','patrimonio')">Patrimônio</th>
+          <th onclick="sortTable('itens','descricao')">Descrição</th>
+          <th onclick="sortTable('itens','categoria')">Categoria</th>
+          <th onclick="sortTable('itens','marca')">Marca/Modelo</th>
+          <th onclick="sortTable('itens','serie')">Nº Série</th>
+          <th onclick="sortTable('itens','qtdTotal')">Total</th>
+          <th onclick="sortTable('itens','qtdDisp')">Disponível</th>
+          <th onclick="sortTable('itens','qtdMin')">Mínimo</th>
+          <th onclick="sortTable('itens','dtVal')">Vencimento</th>
+          <th onclick="sortTable('itens','fornecedor')">Fornecedor</th>
+          <th onclick="sortTable('itens','status')">Status</th>
+          <th>Ações</th>
+        </tr></thead>
+        <tbody id="tbody-itens"><tr><td colspan="12" class="text-center" style="padding:20px;color:#999">Nenhum item cadastrado</td></tr></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="pag-itens"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     PÁGINA: CAD. FORNECEDORES
+══════════════════════════════════════════ -->
+<div id="pg-cad-fornecedor" class="page">
+  <div class="page-header flex justify-between items-center">
+    <div><h1>🏭 Fornecedores</h1><p>Empresas e prestadores de serviço</p></div>
+    <div class="flex gap-8">
+      <button class="btn btn-outline" onclick="abrirImportacaoXmlFornecedores()">📥 Ler XML</button>
+      <button class="btn btn-outline" onclick="abrirImportacaoPdfFornecedores()">📄 Ler PDF</button>
+      <button class="btn btn-primary" onclick="abrirModalFornecedor()">➕ Novo Fornecedor</button>
+    </div>
+  </div>
+  <input type="file" id="xml-forn-input" accept=".xml,text/xml,application/xml" style="display:none" onchange="importarFornecedoresXml(event)">
+  <input type="file" id="pdf-forn-input" accept=".pdf,application/pdf" style="display:none" onchange="importarFornecedoresPdf(event)">
+  <div class="card">
+    <div class="search-bar">
+      <input type="text" id="filter-forn-text" placeholder="🔍 Buscar..." oninput="renderFornecedoresTable()">
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th onclick="sortTable('fornecedores','nome')">Razão Social</th>
+          <th onclick="sortTable('fornecedores','cnpj')">CNPJ/CPF</th>
+          <th onclick="sortTable('fornecedores','contato')">Contato</th>
+          <th onclick="sortTable('fornecedores','tel')">Telefone</th>
+          <th onclick="sortTable('fornecedores','email')">E-mail</th>
+          <th onclick="sortTable('fornecedores','categoria')">Categoria</th>
+          <th>Ações</th>
+        </tr></thead>
+        <tbody id="tbody-fornecedores"><tr><td colspan="7" class="text-center" style="padding:20px;color:#999">Nenhum fornecedor cadastrado</td></tr></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="pag-fornecedores"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     PÁGINA: CAD. MENUS SUSPENSOS
+══════════════════════════════════════════ -->
+<div id="pg-cad-menus" class="page">
+  <div class="page-header flex justify-between items-center">
+    <div><h1>🧩 Menus Suspensos</h1><p>Gerencie as opções dos selects do módulo de serviços</p></div>
+    <button class="btn btn-outline btn-sm" onclick="sincronizarMenusBackend()">🔄 Sincronizar Backend</button>
+  </div>
+  <div class="card">
+    <div class="card-title">🔌 Conexão Backend (menus)</div>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>URL base da API</label>
+        <input type="text" id="menu-api-base" placeholder="Ex.: http://127.0.0.1:8000/api">
+      </div>
+    </div>
+    <div class="flex gap-8 mt-16">
+      <button class="btn btn-primary" onclick="salvarConfigBackendMenus()">💾 Salvar Conexão</button>
+      <button class="btn btn-outline" onclick="testarConexaoBackendMenus()">🧪 Testar Conexão</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">📌 Resumo das Opções</div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-val" id="menu-total-opcoes">0</div><div class="stat-label">Total de Opções</div></div>
+      <div class="stat-card green"><div class="stat-val" id="menu-total-ativas">0</div><div class="stat-label">Ativas</div></div>
+      <div class="stat-card gray"><div class="stat-val" id="menu-total-inativas">0</div><div class="stat-label">Inativas</div></div>
+      <div class="stat-card blue"><div class="stat-val" id="menu-total-grupos">0</div><div class="stat-label">Grupos com Dados</div></div>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">➕ Nova Opção</div>
+      <input type="hidden" id="menu-id">
+      <div class="form-grid">
+        <div class="form-group"><label>Grupo *</label>
+          <select id="menu-grupo"></select>
+        </div>
+        <div class="form-group"><label>Rótulo *</label><input type="text" id="menu-rotulo" placeholder="Ex.: Manutenção Preventiva"></div>
+        <div class="form-group"><label>Valor técnico</label><input type="text" id="menu-valor" placeholder="Ex.: manutencao_preventiva"></div>
+        <div class="form-group"><label>Ordem</label><input type="number" id="menu-ordem" min="0" value="0"></div>
+        <div class="form-group"><label>Ativo</label>
+          <select id="menu-ativo"><option value="true">Sim</option><option value="false">Não</option></select>
+        </div>
+      </div>
+      <div class="flex gap-8 mt-16">
+        <button class="btn btn-primary" onclick="salvarOpcaoMenu()">💾 Salvar Opção</button>
+        <button class="btn btn-outline" onclick="limparFormMenu()">🗑️ Limpar</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">🔎 Filtros</div>
+      <div class="search-bar">
+        <input type="text" id="filter-menu-text" placeholder="Buscar por rótulo/valor..." oninput="renderMenusTable()">
+        <select id="filter-menu-grupo" onchange="renderMenusTable()"></select>
+        <select id="filter-menu-ativo" onchange="renderMenusTable()">
+          <option value="">Todos</option>
+          <option value="true">Ativos</option>
+          <option value="false">Inativos</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Grupo</th><th>Rótulo</th><th>Valor</th><th>Ordem</th><th>Status</th><th>Ações</th></tr></thead>
+          <tbody id="tbody-menus"><tr><td colspan="6" class="text-center" style="padding:20px;color:#999">Nenhuma opção cadastrada</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+</div><!-- /app-body -->
+
+<!-- ══════════════════════════════════════════════════
+     MODAIS
+══════════════════════════════════════════════════ -->
+
+<!-- MODAL POLICIAL -->
+<div class="modal-overlay" id="modal-policial">
+  <div class="modal">
+    <div class="modal-header"><h2>👮 <span id="modal-pol-title">Novo Policial</span></h2><button class="modal-close" onclick="fecharModal('modal-policial')">×</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label>Matrícula *</label><input type="text" id="pol-matricula" placeholder="Ex.: 123456"></div>
+        <div class="form-group"><label>Nome Completo *</label><input type="text" id="pol-nome" placeholder="Nome completo"></div>
+        <div class="form-group"><label>Cargo / Posto</label>
+          <select id="pol-cargo">
+            <option value="">Selecione...</option>
+            <option>Delegado de Polícia</option><option>Perito</option><option>Auxiliar de Perícia</option><option>Oficial Investigador de Polícia</option><option>Outro</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Departamento *</label>
+          <select id="pol-depto" onchange="updateLotacaoModal('pol-depto','pol-lotacao')"><option value="">Selecione...</option></select>
+        </div>
+        <div class="form-group"><label>Lotação *</label>
+          <select id="pol-lotacao"><option value="">Selecione o departamento</option></select>
+        </div>
+        <div class="form-group"><label>Telefone</label><input type="text" id="pol-tel" placeholder="(85) 99999-9999"></div>
+        <div class="form-group"><label>E-mail</label><input type="email" id="pol-email" placeholder="email@pc.ce.gov.br"></div>
+        <div class="form-group full"><label>Observações</label><textarea id="pol-obs" placeholder="Informações adicionais..."></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharModal('modal-policial')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarPolicial()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL LOTAÇÃO -->
+<div class="modal-overlay" id="modal-lotacao">
+  <div class="modal">
+    <div class="modal-header"><h2>🏢 <span id="modal-lot-title">Nova Lotação</span></h2><button class="modal-close" onclick="fecharModal('modal-lotacao')">×</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label>Departamento *</label><input type="text" id="lot-depto" placeholder="Ex.: DHPP, DEIC, CIOPS..."></div>
+        <div class="form-group"><label>Nome da Unidade *</label><input type="text" id="lot-nome" placeholder="Ex.: 1ª Delegacia de Polícia"></div>
+        <div class="form-group"><label>Cidade *</label><input type="text" id="lot-cidade" placeholder="Ex.: Fortaleza"></div>
+        <div class="form-group"><label>Responsável</label><input type="text" id="lot-resp" placeholder="Nome do responsável"></div>
+        <div class="form-group"><label>Telefone</label><input type="text" id="lot-tel" placeholder="(85) 3101-0000"></div>
+        <div class="form-group full"><label>Endereço</label><input type="text" id="lot-end" placeholder="Rua, número, bairro..."></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharModal('modal-lotacao')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarLotacao()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ITEM -->
+<div class="modal-overlay" id="modal-item">
+  <div class="modal">
+    <div class="modal-header"><h2>📦 <span id="modal-item-title">Novo Item</span></h2><button class="modal-close" onclick="fecharModal('modal-item')">×</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label>Nº Patrimônio</label><input type="text" id="item-patrimonio" placeholder="Ex.: PAT-001"></div>
+        <div class="form-group"><label>Categoria *</label>
+          <select id="item-categoria" onchange="onCategoriaItemChange()">
+            <option value="">Selecione...</option>
+            <option value="armas">🔫 Armas</option>
+            <option value="coletes">🛡️ Coletes</option>
+            <option value="equipamentos">🧰 Equipamentos</option>
+            <option value="uniformes">👕 Uniformes</option>
+            <option value="municoes">🟡 Munições</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Subcategoria *</label>
+          <select id="item-subcategoria" onchange="aoMudarSubcategoria()">
+            <option value="">Selecione a categoria</option>
+          </select>
+        </div>
+        
+        <div class="form-group" id="container-marca">
+          <label>Marca</label>
+          <input type="text" id="item-marca" placeholder="Ex.: Glock">
+        </div>
+        <div class="form-group" id="container-modelo">
+          <label>Modelo</label>
+          <input type="text" id="item-modelo" placeholder="Ex.: 17">
+        </div>
+        <div class="form-group" id="campo-serie"><label>Nº Série</label><input type="text" id="item-serie" placeholder="Ex.: ABC123456"></div>
+        <div class="form-group"><label>Fornecedor</label>
+          <select id="item-fornecedor"><option value="">Selecione...</option></select>
+        </div>
+        <div class="form-group"><label>Data de Aquisição</label><input type="date" id="item-dt-aq"></div>
+        <div class="form-group" id="campo-validade"><label>Data de Validade / Vencimento</label><input type="date" id="item-dt-val"></div>
+        <div class="form-group"><label>Status</label>
+          <select id="item-status">
+            <option>Disponível</option><option>Em Uso</option><option>Em Reparo</option><option>Inservível</option><option>Extraviado</option><option>Furtado</option>
+          </select>
+        </div>
+        <div class="form-group full"><label>Observações</label><textarea id="item-obs" placeholder="Informações adicionais..."></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharModal('modal-item')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarItem()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL FORNECEDOR -->
+<div class="modal-overlay" id="modal-fornecedor">
+  <div class="modal">
+    <div class="modal-header"><h2>🏭 <span id="modal-forn-title">Novo Fornecedor</span></h2><button class="modal-close" onclick="fecharModal('modal-fornecedor')">×</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label>Razão Social / Nome *</label><input type="text" id="forn-nome" placeholder="Nome da empresa ou pessoa"></div>
+        <div class="form-group"><label>CNPJ / CPF</label><input type="text" id="forn-cnpj" placeholder="00.000.000/0000-00"></div>
+        <div class="form-group"><label>Contato (pessoa)</label><input type="text" id="forn-contato" placeholder="Nome do representante"></div>
+        <div class="form-group"><label>Telefone</label><input type="text" id="forn-tel" placeholder="(85) 99999-9999"></div>
+        <div class="form-group"><label>E-mail</label><input type="email" id="forn-email" placeholder="contato@empresa.com"></div>
+        <div class="form-group"><label>Categoria de Fornecimento</label>
+          <select id="forn-categoria">
+            <option value="">Selecione...</option>
+            <option>Armamento</option><option>Munição</option><option>EPI / Uniformes</option>
+            <option>Equipamento Eletrônico</option><option>Serviços</option><option>Geral</option>
+          </select>
+        </div>
+        <div class="form-group full"><label>Endereço</label><input type="text" id="forn-end" placeholder="Rua, número, cidade..."></div>
+        <div class="form-group full"><label>Observações</label><textarea id="forn-obs" placeholder="Informações adicionais..."></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharModal('modal-fornecedor')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarFornecedor()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CAUTELA -->
+<div class="modal-overlay" id="modal-cautela">
+  <div class="modal" style="max-width:800px">
+    <div class="modal-header"><h2>📜 <span id="modal-caut-title">Nova Cautela</span></h2><button class="modal-close" onclick="fecharModal('modal-cautela')">×</button></div>
+    <div class="modal-body">
+      <div class="alert alert-danger" id="alert-caut-err" style="display:none">⚠️ Preencha todos os campos obrigatórios.</div>
+      <div class="alert alert-danger" id="alert-caut-estoque" style="display:none">⚠️ Quantidade indisponível em estoque.</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Nº da Cautela</label><input type="text" id="caut-numero" placeholder="Gerado automaticamente" readonly style="background:#e8ebf7"></div>
+        <div class="form-group"><label>Data de Saída *</label><input type="date" id="caut-data-saida"></div>
+        <div class="form-group"><label>Previsão de Devolução</label><input type="date" id="caut-data-prev"></div>
+      </div>
+      <div class="card-title mt-16">👮 Policial</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Matrícula *</label><input type="text" id="caut-matricula" placeholder="Ex.: 123456" oninput="autoFillCautela()"></div>
+        <div class="form-group"><label>Nome do Policial *</label><input type="text" id="caut-policial" placeholder="Nome completo"></div>
+        <div class="form-group"><label>Departamento *</label>
+          <select id="caut-depto" onchange="updateLotacaoModal('caut-depto','caut-lotacao')"><option value="">Selecione...</option></select>
+        </div>
+        <div class="form-group"><label>Lotação *</label>
+          <select id="caut-lotacao"><option value="">Selecione o departamento</option></select>
+        </div>
+      </div>
+      <div class="card-title mt-16">📦 Item Cautelado</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Categoria *</label>
+          <select id="caut-cat" onchange="onCategoriaCautelaChange()">
+            <option value="">Selecione...</option>
+            <option value="armas">🔫 Armas</option><option value="coletes">🛡️ Coletes</option>
+            <option value="equipamentos">🧰 Equipamentos</option><option value="uniformes">👕 Uniformes</option>
+            <option value="municoes">🟡 Munições</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Subcategoria</label>
+          <select id="caut-subcategoria" onchange="filtrarItensCautela()">
+            <option value="">Todas da categoria</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Item *</label>
+          <select id="caut-item" onchange="preencherDadosItem()"><option value="">Selecione a categoria primeiro</option></select>
+        </div>
+        <div class="form-group"><label>Nº Série / Patrimônio</label><input type="text" id="caut-serie" placeholder="Digite o nº de série ou patrimônio" oninput="sincronizarItemPorSerie()"></div>
+        <div class="form-group"><label>Quantidade *</label><input type="number" id="caut-qtd" min="1" value="1" oninput="validarEstoqueCautela()"></div>
+        <div class="form-group"><label>Disponível em Estoque</label><input type="text" id="caut-disp" readonly style="background:#e8ebf7;color:var(--success);font-weight:700"></div>
+      </div>
+      <div class="form-grid mt-16">
+        <div class="form-group full"><label>Observações / Finalidade</label><textarea id="caut-obs" placeholder="Descreva a finalidade ou observações relevantes..."></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharModal('modal-cautela')">Cancelar</button>
+      <button class="btn btn-success" onclick="salvarCautela()">💾 Registrar Cautela</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DEVOLUÇÃO -->
+<div class="modal-overlay" id="modal-devolucao">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header"><h2>↩️ Registrar Devolução</h2><button class="modal-close" onclick="fecharModal('modal-devolucao')">×</button></div>
+    <div class="modal-body">
+      <div id="dev-info" style="background:#f0f4ff;border-radius:8px;padding:14px;margin-bottom:16px;font-size:.87rem;line-height:1.7"></div>
+      <div class="form-grid">
+        <div class="form-group"><label>Data de Devolução *</label><input type="date" id="dev-data"></div>
+        <div class="form-group"><label>Condição do Item</label>
+          <select id="dev-condicao">
+            <option>Bom estado</option><option>Com avaria</option><option>Danificado</option><option>Extraviado</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Item volta para estoque?</label>
+          <select id="dev-retorna-estoque">
+            <option value="sim">Sim</option>
+            <option value="nao">Não</option>
+          </select>
+        </div>
+        <div class="form-group full"><label>Observações</label><textarea id="dev-obs" placeholder="Observações sobre a devolução..."></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharModal('modal-devolucao')">Cancelar</button>
+      <button class="btn btn-warning" onclick="confirmarDevolucao()">↩️ Confirmar Devolução</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL VISUALIZAR SERVICO -->
+<div class="modal-overlay" id="modal-view-servico">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-header"><h2>📋 Detalhes do Registro</h2><button class="modal-close" onclick="fecharModal('modal-view-servico')">×</button></div>
+    <div class="modal-body" id="modal-view-servico-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharModal('modal-view-servico')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CAUTELA PDF PREVIEW -->
+<div class="modal-overlay" id="modal-cautela-pdf">
+  <div class="modal" style="max-width:800px">
+    <div class="modal-header"><h2>🖨️ Termo de Cautela</h2><button class="modal-close" onclick="fecharModal('modal-cautela-pdf')">×</button></div>
+    <div class="modal-body">
+      <div class="flex gap-8 mb-16 no-print">
+        <button class="btn btn-success" onclick="imprimirCautelaDoc()">🖨️ Imprimir / Salvar PDF</button>
+        <button class="btn btn-outline" onclick="fecharModal('modal-cautela-pdf')">Fechar</button>
+      </div>
+      <div id="cautela-doc-content"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL RELATORIO PDF PREVIEW -->
+<div class="modal-overlay" id="modal-rel-pdf">
+  <div class="modal" style="max-width:900px">
+    <div class="modal-header"><h2>🖨️ Relatório de Movimentações</h2><button class="modal-close" onclick="fecharModal('modal-rel-pdf')">×</button></div>
+    <div class="modal-body">
+      <div class="flex gap-8 mb-16 no-print">
+        <button class="btn btn-success" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+        <button class="btn btn-outline" onclick="fecharModal('modal-rel-pdf')">Fechar</button>
+      </div>
+      <div id="relatorio-doc-content"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR SERVICO -->
+<div class="modal-overlay" id="modal-edit-servico">
+  <div class="modal" style="max-width:760px">
+    <div class="modal-header"><h2>✏️ Editar Registro de Serviço</h2><button class="modal-close" onclick="fecharModal('modal-edit-servico')">×</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-serv-id">
+      <div class="form-grid">
+        <div class="form-group"><label>Tipo de Serviço *</label>
+          <select id="edit-tipo">
+            <option>Manutenção</option><option>Limpeza</option>
+            <option>Reposição de Peça</option><option>Reposição de Arma</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Armeiro *</label>
+          <select id="edit-armeiro">
+            <option>Armeiro 1</option><option>Armeiro 2</option><option>Armeiro 3</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Data Recebimento *</label><input type="date" id="edit-data-rec"></div>
+        <div class="form-group"><label>Data Devolução</label><input type="date" id="edit-data-dev"></div>
+        <div class="form-group"><label>Status *</label>
+          <select id="edit-status">
+            <option>Aberto</option><option>Em Andamento</option><option>Aguardando Peça</option><option>Aguardando Teste</option><option>Concluído</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Motivo</label>
+          <select id="edit-motivo">
+            <option value="">Selecione...</option>
+            <option>Mau funcionamento</option><option>Dano físico</option><option>Rotina</option><option>Solicitação do policial</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Matrícula</label><input type="text" id="edit-matricula"></div>
+        <div class="form-group"><label>Policial</label><input type="text" id="edit-policial"></div>
+        <div class="form-group"><label>Departamento</label>
+          <select id="edit-depto" onchange="updateLotacaoModal('edit-depto','edit-lotacao')"><option value="">Selecione...</option></select>
+        </div>
+        <div class="form-group"><label>Lotação</label>
+          <select id="edit-lotacao"><option value="">Selecione...</option></select>
+        </div>
+        <div class="form-group"><label>Modelo Arma</label>
+          <select id="edit-modelo">
+            <option>GLOCK G17</option><option>GLOCK G19</option><option>GLOCK G26</option>
+            <option>SIG SAUER P320</option>
+            <option>TAURUS PT-100</option><option>TAURUS PT-101</option><option>TAURUS PT-640</option>
+            <option>TAURUS PT-840</option><option>TAURUS PT-940</option><option>TAURUS PT-24/7</option>
+            <option>BERETA APX (9mm)</option><option>REVOLVER</option>
+            <option>RADICAL FIREARMS RF 14 5.56</option><option>IMBEL IA2</option><option>BUSHMASTER XM15E25</option>
+            <option>ARMALITE AR10</option><option>HK HKPSG1</option>
+            <option>SIGSAUER MPX (9mm)</option><option>TAURUS CT .40</option><option>TAURUS CTT .40</option>
+            <option>TAURUS SMT .40</option><option>TAURUS MT 9mm</option><option>TAURUS MT .40</option><option>TAURUS MT12 (9mm)</option>
+            <option>HK MP5 (9mm)</option><option>INA MB50 (.45)</option>
+            <option>BENELLI M3A1</option><option>CBC 586</option><option>CBC 151</option><option>CBC 586P</option>
+            <option>BOITO BSA 5T 84</option><option>ROSSI OVERLAND</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Nº Série</label><input type="text" id="edit-serie"></div>
+        <div class="form-group full"><label>Descrição do Serviço</label><textarea id="edit-descricao"></textarea></div>
+        <div class="form-group full"><label>Peças Substituídas</label><textarea id="edit-pecas"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharModal('modal-edit-servico')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarEdicaoServico()">💾 Salvar Alterações</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR CAUTELA -->
+<div class="modal-overlay" id="modal-edit-cautela">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header"><h2>✏️ Editar Cautela</h2><button class="modal-close" onclick="fecharModal('modal-edit-cautela')">×</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-caut-id">
+      <div class="form-grid">
+        <div class="form-group"><label>Previsão de Devolução</label><input type="date" id="edit-caut-prev"></div>
+        <div class="form-group"><label>Status</label>
+          <select id="edit-caut-status">
+            <option>Ativa</option><option>Devolvido</option><option>Vencida</option><option>Extraviado</option>
+          </select>
+        </div>
+        <div class="form-group full"><label>Observações</label><textarea id="edit-caut-obs"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharModal('modal-edit-cautela')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarEdicaoCautela()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
+    
+    // Tenta manter o modelo selecionado (útil durante a edição do item)
+    if (modeloAtual && MARCAS_MODELOS[marcaSelecionada].includes(modeloAtual)) {
+      selectModelo.value = modeloAtual;
+    }
+  } else {
+    selectModelo.innerHTML = '<option value="">Selecione a marca primeiro</option>';
+  }
+}
+
+const SORT = {};
+const PAG  = {};
+let   editingPolId   = null;
+let   editingLotId   = null;
+let   editingItemId  = null;
+let   editingFornId  = null;
+let   editingCautId  = null;
+let   devCautId      = null;
+let   relatorioFiltrado = [];
+
+function salvar(chave){ localStorage.setItem('salt_'+chave, JSON.stringify(DB[chave])); }
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function hoje(){ return new Date().toISOString().slice(0,10); }
+function fmtData(d){ if(!d) return '—'; const [y,m,dd]=d.split('-'); return `${dd}/${m}/${y}`; }
+function fmtDataHora(){ return new Date().toLocaleString('pt-BR'); }
+function diasParaData(d){
+  if(!d) return null;
+  const hojeDate=new Date(hoje()+'T00:00:00');
+  const alvoDate=new Date(d+'T00:00:00');
+  return Math.ceil((alvoDate-hojeDate)/(1000*60*60*24));
+}
+
+function abrirImportacaoXmlFornecedores(){
+  const input=document.getElementById('xml-forn-input');
+  if(input) input.click();
+}
+
+function abrirImportacaoPlanilhaItens(){
+  const input=document.getElementById('planilha-itens-input');
+  if(input) input.click();
+}
+
+function abrirImportacaoPdfFornecedores(){
+  const input=document.getElementById('pdf-forn-input');
+  if(input) input.click();
+}
+
+function abrirImportacaoPdfItens(){
+  const input=document.getElementById('pdf-itens-input');
+  if(input) input.click();
+}
+
+function baixarModeloPlanilhaItens(){
+  const cab='patrimonio;descricao;categoria;subcategoria;marca;modelo;serie;qtd_total;qtd_disponivel;qtd_min;fornecedor;status;data_aquisicao;data_validade;observacoes';
+  const exemplo='PAT-001;Pistola Glock 17;armas;pistola;Glock;G17;ABC123;1;1;1;Fornecedor Exemplo;Disponível;2026-01-15;;Importado por planilha';
+  const csv=[cab,exemplo].join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='modelo_itens_inventario.csv';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function parseLinhaCsv(linha,separador){
+  const out=[];
+  let cur='';
+  let aspas=false;
+  for(let i=0;i<linha.length;i++){
+    const ch=linha[i];
+    if(ch==='"'){
+      if(aspas && linha[i+1]==='"'){ cur+='"'; i++; }
+      else aspas=!aspas;
+      continue;
+    }
+    if(ch===separador && !aspas){
+      out.push(cur.trim());
+      cur='';
+      continue;
+    }
+    cur+=ch;
+  }
+  out.push(cur.trim());
+  return out;
+}
+
+function detectarSeparadorCsv(linha){
+  const s=String(linha||'');
+  const sc=(s.match(/;/g)||[]).length;
+  const cc=(s.match(/,/g)||[]).length;
+  return sc>=cc ? ';' : ',';
+}
+
+function categoriaFromPlanilha(valor){
+  const v=String(valor||'').trim();
+  if(!v) return '';
+  const norm=normalizarValorMenu(v);
+  const mapa={
+    armas:'armas', arma:'armas', arma_pistola:'armas', arma_fuzil:'armas', arma_fuzil_sniper:'armas', arma_carabina:'armas', arma_espingarda:'armas',
+    coletes:'coletes', colete:'coletes',
+    equipamentos:'equipamentos', equip_radio:'equipamentos', equip_drone:'equipamentos', equip_detector_metal:'equipamentos', equip_algema:'equipamentos', equip_kit_arrombamento:'equipamentos',
+    radio:'equipamentos', drone:'equipamentos', detector:'equipamentos', algema:'equipamentos', kit_arromb:'equipamentos', kit_arrombamento:'equipamentos',
+    uniformes:'uniformes', uniforme_calca_tatica:'uniformes', uniforme_camisa_gola_polo:'uniformes', uniforme_cinto_bdu:'uniformes', uniforme_cinto_guarnicao:'uniformes', uniforme_combat_shirt:'uniformes', uniforme_jaqueta_tatica:'uniformes', uniforme_capa_chuva:'uniformes', uniforme_bota_tatica:'uniformes',
+    calca_tatica:'uniformes', polo:'uniformes', cinto_tatico:'uniformes', jaqueta:'uniformes', capa_chuva:'uniformes', bota_tatica:'uniformes',
+    municoes:'municoes', municao:'municoes', municao_9mm:'municoes', municao_40:'municoes', municao_556x45:'municoes', municao_12:'municoes'
+  };
+  if(mapa[norm]) return mapa[norm];
+  return inferirCategoriaItem(v);
+}
+
+function subcategoriaFromPlanilha(categoria, valor, descricao=''){
+  const v=String(valor||'').trim();
+  const norm=normalizarValorMenu(v);
+  const mapa={
+    pistola:'pistola', fuzil:'fuzil', fuzil_sniper:'fuzil_sniper', carabina:'carabina', espingarda:'espingarda',
+    protecta:'protecta', imbraland:'imbraland',
+    radio:'radio_comunicador', radio_comunicador:'radio_comunicador', ht:'radio_comunicador',
+    drone:'drone', detector:'detector_metal', detector_metal:'detector_metal',
+    algema:'algema', kit_arrombamento:'kit_arrombamento', kit_arromb:'kit_arrombamento',
+    calca_tatica:'calca_tatica', camisa_gola_polo:'camisa_gola_polo', polo:'camisa_gola_polo',
+    cinto_bdu:'cinto_bdu', cinto_guarnicao:'cinto_guarnicao', combat_shirt:'combat_shirt',
+    jaqueta_tatica:'jaqueta_tatica', capa_chuva:'capa_chuva', bota_tatica:'bota_tatica',
+    '9mm':'9mm', '40':'40', '556x45':'556x45', '12':'12'
+  };
+  if(mapa[norm]) return mapa[norm];
+  const inf=inferirCategoriaSubcategoriaPorTexto(descricao||v);
+  if(inf.categoria===categoria) return inf.subcategoria;
+  const primeira=subcategoriasPorCategoria(categoria)[0];
+  return primeira ? primeira.valor : '';
+}
+
+async function importarPlanilhaItens(event){
+  const input=event && event.target ? event.target : document.getElementById('planilha-itens-input');
+  const file=input && input.files && input.files[0] ? input.files[0] : null;
+  if(!file) return;
+  try{
+    const txt=await file.text();
+    const linhas=String(txt||'').split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+    if(linhas.length<2){ alert('Planilha vazia ou sem dados.'); return; }
+    const sep=detectarSeparadorCsv(linhas[0]);
+    const headers=parseLinhaCsv(linhas[0],sep).map(h=>normalizarValorMenu(h));
+    const idx=(...nomes)=>nomes.map(n=>headers.indexOf(normalizarValorMenu(n))).find(i=>i>=0) ?? -1;
+    const iPat=idx('patrimonio','n_patrimonio');
+    const iDesc=idx('descricao','descricao_item','item');
+    const iCat=idx('categoria');
+    const iSub=idx('subcategoria','sub_categoria');
+    const iMarca=idx('marca');
+    const iModelo=idx('modelo');
+    const iSerie=idx('serie','n_serie');
+    const iQtdT=idx('qtd_total','quantidade_total','total');
+    const iQtdD=idx('qtd_disponivel','quantidade_disponivel','disponivel');
+    const iQtdM=idx('qtd_min','qtd_minima','minimo');
+    const iForn=idx('fornecedor','razao_social');
+    const iStatus=idx('status');
+    const iDtAq=idx('data_aquisicao','dt_aq');
+    const iDtVal=idx('data_validade','dt_val');
+    const iObs=idx('observacoes','obs');
+    if(iDesc<0 || iCat<0){ alert('Planilha inválida: precisa ter ao menos colunas descrição e categoria.'); return; }
+    let importados=0;
+    for(let l=1;l<linhas.length;l++){
+      const cols=parseLinhaCsv(linhas[l],sep);
+      const descricao=(cols[iDesc]||'').trim();
+      if(!descricao) continue;
+      const patrimonio=iPat>=0 ? (cols[iPat]||'').trim() : '';
+      const categoria=categoriaFromPlanilha(iCat>=0 ? cols[iCat] : '');
+      const subcategoria=subcategoriaFromPlanilha(categoria, iSub>=0 ? cols[iSub] : '', descricao);
+      const marca=iMarca>=0 ? (cols[iMarca]||'').trim() : '';
+      const modelo=iModelo>=0 ? (cols[iModelo]||'').trim() : '';
+      const serie=iSerie>=0 ? (cols[iSerie]||'').trim() : '';
+      const qtdTotal=Math.max(1,Math.round(numeroXml(iQtdT>=0 ? cols[iQtdT] : '1',1)));
+      const qtdDisp=Math.max(0,Math.round(numeroXml(iQtdD>=0 ? cols[iQtdD] : String(qtdTotal),qtdTotal)));
+      const qtdMin=Math.max(0,Math.round(numeroXml(iQtdM>=0 ? cols[iQtdM] : '1',1)));
+      const fornecedorNome=iForn>=0 ? (cols[iForn]||'').trim() : '';
+      const fornecedor=fornecedorNome ? upsertFornecedor({nome:fornecedorNome}) : null;
+      const statusRaw=iStatus>=0 ? (cols[iStatus]||'').trim() : 'Disponível';
+      const status=normalizarStatusItem(statusRaw) || 'Disponível';
+      const dtAq=iDtAq>=0 ? dataXml(cols[iDtAq]) : '';
+      const dtVal=iDtVal>=0 ? dataXml(cols[iDtVal]) : '';
+      const obs=iObs>=0 ? (cols[iObs]||'').trim() : 'Importado de planilha';
+      let itemExistente=null;
+      if(patrimonio){
+        itemExistente=DB.itens.find(i=>String(i.patrimonio||'').trim().toLowerCase()===patrimonio.toLowerCase())||null;
+      }
+      if(!itemExistente){
+        itemExistente=DB.itens.find(i=>
+          String(i.descricao||'').trim().toLowerCase()===descricao.toLowerCase()
+          && String(i.categoria||'')===String(categoria||'')
+          && String(i.subcategoria||'')===String(subcategoria||'')
+          && String(i.fornecedor||'').trim().toLowerCase()===String(fornecedorNome||'').trim().toLowerCase()
+        )||null;
+      }
+      if(itemExistente){
+        itemExistente.patrimonio=patrimonio||itemExistente.patrimonio||'';
+        itemExistente.descricao=descricao;
+        itemExistente.categoria=categoria||itemExistente.categoria;
+        itemExistente.subcategoria=subcategoria||itemExistente.subcategoria||'';
+        itemExistente.marca=marca;
+        itemExistente.modelo=modelo;
+        itemExistente.serie=serie;
+        itemExistente.qtdTotal=qtdTotal;
+        itemExistente.qtdDisp=qtdDisp;
+        itemExistente.qtdMin=qtdMin;
+        itemExistente.fornecedorId=fornecedor ? fornecedor.id : (itemExistente.fornecedorId||'');
+        itemExistente.fornecedor=fornecedorNome||itemExistente.fornecedor||'';
+        itemExistente.dtAq=dtAq||itemExistente.dtAq||'';
+        itemExistente.dtVal=dtVal||'';
+        itemExistente.status=status;
+        itemExistente.obs=obs;
+      }else{
+        DB.itens.push({
+          id:uid(),
+          patrimonio,
+          descricao,
+          categoria:categoria||inferirCategoriaItem(descricao),
+          subcategoria:subcategoria||inferirCategoriaSubcategoriaPorTexto(descricao).subcategoria,
+          marca,
+          modelo,
+          serie,
+          qtdTotal,
+          qtdDisp,
+          qtdMin,
+          fornecedorId:fornecedor ? fornecedor.id : '',
+          fornecedor:fornecedorNome,
+          dtAq,
+          dtVal,
+          status,
+          obs
+        });
+      }
+      importados++;
+    }
+    if(!importados){ alert('Nenhuma linha válida encontrada na planilha.'); return; }
+    salvar('fornecedores');
+    salvar('itens');
+    populateFornecedoresSelect();
+    renderFornecedoresTable();
+    renderItensTable();
+    renderDashEstoque();
+    alert(`${importados} item(ns) importado(s) da planilha.`);
+  }catch(e){
+    alert('Falha ao ler planilha de itens. Use arquivo CSV.');
+  }finally{
+    if(input) input.value='';
+  }
+}
+
+let pdfJsClassicLoaderPromise=null;
+function carregarPdfJsClassic(){
+  if(window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if(pdfJsClassicLoaderPromise) return pdfJsClassicLoaderPromise;
+  pdfJsClassicLoaderPromise=new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js';
+    s.onload=()=>{
+      if(window.pdfjsLib){
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+        resolve(window.pdfjsLib);
+      }else{
+        reject(new Error('Leitor de PDF indisponível.'));
+      }
+    };
+    s.onerror=()=>reject(new Error('Falha ao carregar leitor de PDF.'));
+    document.head.appendChild(s);
+  });
+  return pdfJsClassicLoaderPromise;
+}
+
+async function lerArquivoPdf(file){
+  const pdfjs=await carregarPdfJsClassic();
+  const arrBuffer=await file.arrayBuffer();
+  const pdf=await pdfjs.getDocument({data:arrBuffer}).promise;
+  const paginas=[];
+  for(let p=1;p<=pdf.numPages;p++){
+    const page=await pdf.getPage(p);
+    const content=await page.getTextContent();
+    const txt=content.items.map(i=>String(i.str||'')).join(' ');
+    paginas.push(txt);
+  }
+  return paginas.join('\n');
+}
+
+function lerArquivoXml(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>{
+      try{
+        const xml=String(reader.result||'');
+        const doc=new DOMParser().parseFromString(xml,'text/xml');
+        if(doc.getElementsByTagName('parsererror').length){
+          reject(new Error('XML inválido.'));
+          return;
+        }
+        resolve(doc);
+      }catch(e){
+        reject(e);
+      }
+    };
+    reader.onerror=()=>reject(new Error('Falha ao ler arquivo XML.'));
+    reader.readAsText(file);
+  });
+}
+
+function xmlNodeText(root,nome){
+  if(!root) return '';
+  const nodes=root.getElementsByTagName('*');
+  for(let i=0;i<nodes.length;i++){
+    if((nodes[i].localName||'').toLowerCase()===String(nome).toLowerCase()){
+      return String(nodes[i].textContent||'').trim();
+    }
+  }
+  return '';
+}
+
+function xmlChildText(root,nome){
+  if(!root) return '';
+  const children=root.children||[];
+  for(let i=0;i<children.length;i++){
+    if((children[i].localName||'').toLowerCase()===String(nome).toLowerCase()){
+      return String(children[i].textContent||'').trim();
+    }
+  }
+  return '';
+}
+
+function xmlChildren(root,nome){
+  if(!root) return [];
+  const nodes=root.getElementsByTagName('*');
+  const out=[];
+  for(let i=0;i<nodes.length;i++){
+    if((nodes[i].localName||'').toLowerCase()===String(nome).toLowerCase()){
+      out.push(nodes[i]);
+    }
+  }
+  return out;
+}
+
+function numeroXml(v,def=0){
+  if(v===null || v===undefined) return def;
+  let txt=String(v).trim();
+  if(txt.includes(',') && txt.includes('.')) txt=txt.replace(/\./g,'').replace(',','.');
+  else txt=txt.replace(',','.');
+  const n=parseFloat(txt);
+  return Number.isFinite(n) ? n : def;
+}
+
+function dataXml(v){
+  const txt=String(v||'').trim();
+  if(!txt) return '';
+  return txt.slice(0,10);
+}
+
+function inferirCategoriaItem(descricao){
+  return inferirCategoriaSubcategoriaPorTexto(descricao).categoria;
+}
+
+function inferirCategoriaSubcategoriaPorTexto(descricao){
+  const d=String(descricao||'').toLowerCase();
+  if(d.includes('muni')){
+    if(d.includes('5,56') || d.includes('556') || d.includes('5.56')) return { categoria:'municoes', subcategoria:'556x45' };
+    if(d.includes('9mm') || d.includes('9 mm')) return { categoria:'municoes', subcategoria:'9mm' };
+    if(d.includes('.40') || d.includes('40sw') || d.includes('40 s&w')) return { categoria:'municoes', subcategoria:'40' };
+    if(d.includes('calibre 12') || d.includes(' 12')) return { categoria:'municoes', subcategoria:'12' };
+    return { categoria:'municoes', subcategoria:'9mm' };
+  }
+  if(d.includes('colete')) return { categoria:'coletes', subcategoria:'protecta' };
+  if(d.includes('drone')) return { categoria:'equipamentos', subcategoria:'drone' };
+  if(d.includes('radio') || d.includes('rádio') || d.includes('ht')) return { categoria:'equipamentos', subcategoria:'radio_comunicador' };
+  if(d.includes('detector')) return { categoria:'equipamentos', subcategoria:'detector_metal' };
+  if(d.includes('algema')) return { categoria:'equipamentos', subcategoria:'algema' };
+  if(d.includes('arromb')) return { categoria:'equipamentos', subcategoria:'kit_arrombamento' };
+  if(d.includes('cinto bdu')) return { categoria:'uniformes', subcategoria:'cinto_bdu' };
+  if(d.includes('cinto de guarni') || d.includes('guarnicao')) return { categoria:'uniformes', subcategoria:'cinto_guarnicao' };
+  if(d.includes('combat shirt')) return { categoria:'uniformes', subcategoria:'combat_shirt' };
+  if(d.includes('polo') || d.includes('camisa')) return { categoria:'uniformes', subcategoria:'camisa_gola_polo' };
+  if(d.includes('capa de chuva')) return { categoria:'uniformes', subcategoria:'capa_chuva' };
+  if(d.includes('jaqueta')) return { categoria:'uniformes', subcategoria:'jaqueta_tatica' };
+  if(d.includes('calca') || d.includes('calça')) return { categoria:'uniformes', subcategoria:'calca_tatica' };
+  if(d.includes('bota')) return { categoria:'uniformes', subcategoria:'bota_tatica' };
+  if(d.includes('sniper') || d.includes('ar10') || d.includes('psg1')) return { categoria:'armas', subcategoria:'fuzil_sniper' };
+  if(d.includes('fuzil') || d.includes('ia2') || d.includes('xm15') || d.includes('rf 14') || d.includes('5.56')) return { categoria:'armas', subcategoria:'fuzil' };
+  if(d.includes('carabina') || d.includes('mpx') || d.includes('mp5') || d.includes('mb50') || d.includes('ctt') || d.includes('smt')) return { categoria:'armas', subcategoria:'carabina' };
+  if(d.includes('espingarda') || d.includes('m3a1') || d.includes('overland') || d.includes('boito') || d.includes('cbc 586')) return { categoria:'armas', subcategoria:'espingarda' };
+  if(d.includes('revolver') || d.includes('revólver') || d.includes('pistola') || d.includes('glock') || d.includes('pt-') || d.includes('apx') || d.includes('p320')) return { categoria:'armas', subcategoria:'pistola' };
+  return { categoria:'armas', subcategoria:'pistola' };
+}
+
+function extrairFornecedorDoXml(doc){
+  const emit=xmlChildren(doc,'emit')[0];
+  if(!emit) return null;
+  const ender=xmlChildren(emit,'enderEmit')[0] || null;
+  const nome=xmlChildText(emit,'xNome') || xmlChildText(emit,'xFant');
+  if(!nome) return null;
+  const cnpj=xmlChildText(emit,'CNPJ') || xmlChildText(emit,'CPF');
+  const tel=(ender?xmlChildText(ender,'fone'):'') || '';
+  const email=xmlChildText(emit,'email') || '';
+  const endereco=ender ? [
+    xmlChildText(ender,'xLgr'),
+    xmlChildText(ender,'nro'),
+    xmlChildText(ender,'xBairro'),
+    xmlChildText(ender,'xMun'),
+    xmlChildText(ender,'UF')
+  ].filter(Boolean).join(', ') : '';
+  return { nome, cnpj, tel, email, end:endereco };
+}
+
+function extrairFornecedorDoTextoPdf(texto){
+  const t=String(texto||'').replace(/\s+\n/g,'\n');
+  const cnpjMatch=t.match(/\b\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}\b/);
+  const emailMatch=t.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  const telMatch=t.match(/(?:\(?\d{2}\)?\s*)?\d{4,5}-?\d{4}/);
+  const nomeMatch=
+    t.match(/(?:RAZ[ÃA]O SOCIAL|NOME\/RAZ[ÃA]O SOCIAL|EMITENTE|FORNECEDOR)\s*[:\-]?\s*([^\n]{4,120})/i) ||
+    t.match(/(?:DESTINAT[ÁA]RIO)\s*[:\-]?\s*([^\n]{4,120})/i);
+  const nome=(nomeMatch ? nomeMatch[1] : '').trim();
+  if(!nome && !cnpjMatch) return null;
+  return {
+    nome: nome || `Fornecedor ${cnpjMatch ? cnpjMatch[0] : 'PDF'}`,
+    cnpj: cnpjMatch ? cnpjMatch[0] : '',
+    tel: telMatch ? telMatch[0] : '',
+    email: emailMatch ? emailMatch[0] : '',
+    end: ''
+  };
+}
+
+function extrairItensDoTextoPdf(texto){
+  const linhas=String(texto||'').split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  const itens=[];
+  linhas.forEach(linha=>{
+    const linhaLimpa=linha.replace(/\s+/g,' ').trim();
+    if(linhaLimpa.length<6) return;
+    const p1=linhaLimpa.match(/^(\d+(?:[.,]\d+)?)\s+(UN|UND|UNID|PC|PÇ|CX|PAR|KIT)\s+(.{3,})$/i);
+    if(p1){
+      itens.push({ descricao:p1[3].trim(), qtd:Math.max(1,Math.round(numeroXml(p1[1],1))) });
+      return;
+    }
+    const p2=linhaLimpa.match(/^(.+?)\s+(\d+(?:[.,]\d+)?)\s*(UN|UND|UNID|PC|PÇ|CX|PAR|KIT)\b/i);
+    if(p2){
+      itens.push({ descricao:p2[1].trim(), qtd:Math.max(1,Math.round(numeroXml(p2[2],1))) });
+      return;
+    }
+    const p3=linhaLimpa.match(/^(.+?)\s+QTD(?:ADE)?\s*[:\-]?\s*(\d+(?:[.,]\d+)?)/i);
+    if(p3){
+      itens.push({ descricao:p3[1].trim(), qtd:Math.max(1,Math.round(numeroXml(p3[2],1))) });
+    }
+  });
+  const vistos=new Set();
+  return itens.filter(i=>{
+    const chave=String(i.descricao||'').toLowerCase();
+    if(!chave || vistos.has(chave)) return false;
+    vistos.add(chave);
+    return true;
+  });
+}
+
+function upsertFornecedor(dados){
+  if(!dados || !dados.nome) return null;
+  const cnpjNorm=String(dados.cnpj||'').replace(/\D/g,'');
+  let reg=null;
+  if(cnpjNorm){
+    reg=DB.fornecedores.find(f=>String(f.cnpj||'').replace(/\D/g,'')===cnpjNorm) || null;
+  }
+  if(!reg){
+    reg=DB.fornecedores.find(f=>String(f.nome||'').trim().toLowerCase()===String(dados.nome||'').trim().toLowerCase()) || null;
+  }
+  if(reg){
+    reg.nome=dados.nome||reg.nome;
+    reg.cnpj=dados.cnpj||reg.cnpj||'';
+    reg.tel=dados.tel||reg.tel||'';
+    reg.email=dados.email||reg.email||'';
+    reg.end=dados.end||reg.end||'';
+    return reg;
+  }
+  const novo={
+    id:uid(),
+    nome:dados.nome,
+    cnpj:dados.cnpj||'',
+    contato:'',
+    tel:dados.tel||'',
+    email:dados.email||'',
+    categoria:'Geral',
+    end:dados.end||'',
+    obs:'Importado de XML'
+  };
+  DB.fornecedores.push(novo);
+  return novo;
+}
+
+async function importarFornecedoresXml(event){
+  const input=event && event.target ? event.target : document.getElementById('xml-forn-input');
+  const file=input && input.files && input.files[0] ? input.files[0] : null;
+  if(!file) return;
+  try{
+    const doc=await lerArquivoXml(file);
+    const dados=extrairFornecedorDoXml(doc);
+    if(!dados){ alert('Não foi possível localizar dados de fornecedor neste XML.'); return; }
+    upsertFornecedor(dados);
+    salvar('fornecedores');
+    populateFornecedoresSelect();
+    renderFornecedoresTable();
+    alert('Fornecedor importado do XML com sucesso.');
+  }catch(e){
+    alert('Falha ao importar XML de fornecedor.');
+  }finally{
+    if(input) input.value='';
+  }
+}
+
+async function importarItensXml(event){
+  const input=event && event.target ? event.target : document.getElementById('xml-itens-input');
+  const file=input && input.files && input.files[0] ? input.files[0] : null;
+  if(!file) return;
+  try{
+    const doc=await lerArquivoXml(file);
+    const fornecedor=upsertFornecedor(extrairFornecedorDoXml(doc));
+    const dets=xmlChildren(doc,'det');
+    if(!dets.length){ alert('Não foi possível localizar itens no XML.'); return; }
+    const dtAq=dataXml(xmlNodeText(doc,'dhEmi') || xmlNodeText(doc,'dEmi'));
+    let importados=0;
+    dets.forEach(det=>{
+      const prod=xmlChildren(det,'prod')[0];
+      if(!prod) return;
+      const descricao=xmlChildText(prod,'xProd');
+      if(!descricao) return;
+      const categoria=inferirCategoriaItem(descricao);
+      const qtd=Math.max(1, Math.round(numeroXml(xmlChildText(prod,'qCom'),1)));
+      const patrimonio=xmlChildText(prod,'cProd');
+      const serie=xmlChildText(prod,'nLote') || '';
+      const marca='';
+      const modelo='';
+      const fornecedorId=fornecedor ? fornecedor.id : '';
+      const fornecedorNome=fornecedor ? fornecedor.nome : '';
+      let existente=null;
+      if(patrimonio){
+        existente=DB.itens.find(i=>String(i.patrimonio||'').trim().toLowerCase()===String(patrimonio).trim().toLowerCase()) || null;
+      }
+      if(!existente){
+        existente=DB.itens.find(i=>
+          String(i.descricao||'').trim().toLowerCase()===String(descricao).trim().toLowerCase()
+          && String(i.categoria||'')===String(categoria)
+          && String(i.fornecedorId||'')===String(fornecedorId||'')
+        ) || null;
+      }
+      if(existente){
+        existente.qtdTotal=(parseInt(existente.qtdTotal,10)||0)+qtd;
+        existente.qtdDisp=(parseInt(existente.qtdDisp,10)||0)+qtd;
+        if(!existente.dtAq && dtAq) existente.dtAq=dtAq;
+        if(!existente.fornecedor && fornecedorNome) existente.fornecedor=fornecedorNome;
+        if(!existente.fornecedorId && fornecedorId) existente.fornecedorId=fornecedorId;
+      }else{
+        DB.itens.push({
+          id:uid(),
+          patrimonio,
+          descricao,
+          categoria,
+          marca,
+          modelo,
+          serie,
+          qtdTotal:qtd,
+          qtdDisp:qtd,
+          qtdMin:1,
+          fornecedorId,
+          fornecedor:fornecedorNome,
+          dtAq,
+          dtVal:'',
+          status:'Disponível',
+          obs:'Importado de XML'
+        });
+      }
+      registrarMovimento({
+        tipo:'Entrada (Aquisição)',
+        itemId:existente ? existente.id : DB.itens[DB.itens.length-1].id,
+        itemDesc:descricao,
+        categoria,
+        qtd,
+        serie:serie||patrimonio||'—',
+        policial:'—',
+        matricula:'—',
+        lotacao:'—',
+        numCautela:'—',
+        obs:'Importado de XML',
+        data:dtAq||hoje()
+      });
+      importados++;
+    });
+    if(!importados){ alert('XML lido, mas nenhum item válido foi encontrado.'); return; }
+    salvar('fornecedores');
+    salvar('itens');
+    renderFornecedoresTable();
+    populateFornecedoresSelect();
+    renderItensTable();
+    renderDashEstoque();
+    alert(`${importados} item(ns) importado(s) do XML.`);
+  }catch(e){
+    alert('Falha ao importar XML de itens.');
+  }finally{
+    if(input) input.value='';
+  }
+}
+
+async function importarFornecedoresPdf(event){
+  const input=event && event.target ? event.target : document.getElementById('pdf-forn-input');
+  const file=input && input.files && input.files[0] ? input.files[0] : null;
+  if(!file) return;
+  try{
+    const texto=await lerArquivoPdf(file);
+    const dados=extrairFornecedorDoTextoPdf(texto);
+    if(!dados){ alert('Não foi possível identificar fornecedor neste PDF.'); return; }
+    upsertFornecedor(dados);
+    salvar('fornecedores');
+    populateFornecedoresSelect();
+    renderFornecedoresTable();
+    alert('Fornecedor importado do PDF com sucesso.');
+  }catch(e){
+    alert('Falha ao ler PDF de fornecedor.');
+  }finally{
+    if(input) input.value='';
+  }
+}
+
+async function importarItensPdf(event){
+  const input=event && event.target ? event.target : document.getElementById('pdf-itens-input');
+  const file=input && input.files && input.files[0] ? input.files[0] : null;
+  if(!file) return;
+  try{
+    const texto=await lerArquivoPdf(file);
+    const fornecedor=upsertFornecedor(extrairFornecedorDoTextoPdf(texto));
+    const itensPdf=extrairItensDoTextoPdf(texto);
+    if(!itensPdf.length){ alert('Não foi possível localizar itens no PDF.'); return; }
+    const dtAq=hoje();
+    let importados=0;
+    itensPdf.forEach(it=>{
+      const descricao=it.descricao;
+      const categoria=inferirCategoriaItem(descricao);
+      const qtd=Math.max(1, parseInt(it.qtd,10)||1);
+      const fornecedorId=fornecedor ? fornecedor.id : '';
+      const fornecedorNome=fornecedor ? fornecedor.nome : '';
+      let existente=DB.itens.find(i=>
+        String(i.descricao||'').trim().toLowerCase()===String(descricao).trim().toLowerCase()
+        && String(i.categoria||'')===String(categoria)
+        && String(i.fornecedorId||'')===String(fornecedorId||'')
+      ) || null;
+      if(existente){
+        existente.qtdTotal=(parseInt(existente.qtdTotal,10)||0)+qtd;
+        existente.qtdDisp=(parseInt(existente.qtdDisp,10)||0)+qtd;
+      }else{
+        existente={
+          id:uid(),
+          patrimonio:'',
+          descricao,
+          categoria,
+          marca:'',
+          modelo:'',
+          serie:'',
+          qtdTotal:qtd,
+          qtdDisp:qtd,
+          qtdMin:1,
+          fornecedorId,
+          fornecedor:fornecedorNome,
+          dtAq,
+          dtVal:'',
+          status:'Disponível',
+          obs:'Importado de PDF'
+        };
+        DB.itens.push(existente);
+      }
+      registrarMovimento({
+        tipo:'Entrada (Aquisição)',
+        itemId:existente.id,
+        itemDesc:descricao,
+        categoria,
+        qtd,
+        serie:'—',
+        policial:'—',
+        matricula:'—',
+        lotacao:'—',
+        numCautela:'—',
+        obs:'Importado de PDF',
+        data:dtAq
+      });
+      importados++;
+    });
+    salvar('fornecedores');
+    salvar('itens');
+    populateFornecedoresSelect();
+    renderFornecedoresTable();
+    renderItensTable();
+    renderDashEstoque();
+    alert(`${importados} item(ns) importado(s) do PDF.`);
+  }catch(e){
+    alert('Falha ao ler PDF de itens.');
+  }finally{
+    if(input) input.value='';
+  }
+}
+
+function normalizarValorMenu(txt){
+  return String(txt||'')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g,'_')
+    .replace(/^_+|_+$/g,'');
+}
+
+function normalizarApiBase(url){
+  return String(url||'').trim().replace(/\/+$/,'');
+}
+
+function menuIdBackendValido(id){
+  if(id===null || id===undefined || id==='') return false;
+  const n=Number(id);
+  return Number.isInteger(n) && n>0;
+}
+
+function carregarConfigBackendMenus(){
+  const input=document.getElementById('menu-api-base');
+  if(!input) return;
+  input.value=API_BASE_URL;
+}
+
+function salvarConfigBackendMenus(){
+  const input=document.getElementById('menu-api-base');
+  if(!input) return;
+  const base=normalizarApiBase(input.value);
+  if(!base){
+    alert('Informe a URL base da API.');
+    return;
+  }
+  API_BASE_URL=base;
+  localStorage.setItem('salt_api_base', base);
+  input.value=base;
+  alert('Configuração de backend salva com sucesso.');
+}
+
+function opcoesMenu(grupo, incluirInativos=false){
+  return DB.menuOpcoes
+    .filter(o=>o.grupo===grupo && (incluirInativos || o.ativo!==false))
+    .sort((a,b)=>(a.ordem||0)-(b.ordem||0) || String(a.rotulo||'').localeCompare(String(b.rotulo||''),'pt'));
+}
+
+function normalizarTipoServico(rotulo){
+  const key=normalizarValorMenu(rotulo).replace(/_+/g,'_');
+  if(key==='manutencao') return 'Manutenção';
+  if(key==='limpeza' || key==='limpesa') return 'Limpeza';
+  if(key==='reposicao_de_peca' || key==='reposicao_peca') return 'Reposição de Peça';
+  if(key==='reposicao_de_arma' || key==='reposicao_arma') return 'Reposição de Arma';
+  return null;
+}
+
+function normalizarCargoPolicial(rotulo){
+  const key=normalizarValorMenu(rotulo).replace(/_+/g,'_');
+  if(key==='delegado' || key==='delegado_de_policia') return 'Delegado de Polícia';
+  if(key==='perito') return 'Perito';
+  if(key==='auxiliar_de_pericia') return 'Auxiliar de Perícia';
+  if(key==='outro') return 'Outro';
+  if(
+    key==='oip' ||
+    key==='escrivao' ||
+    key==='inspetor' ||
+    key==='insperot' ||
+    key==='agente' ||
+    key==='oficial_investigador_de_policia' ||
+    key==='ofical_investigador_de_polial'
+  ) return 'Oficial Investigador de Polícia';
+  return null;
+}
+
+function preencherSelectPorGrupo(cfg){
+  const el=document.getElementById(cfg.id);
+  if(!el) return;
+  const atual=el.value;
+  let options=opcoesMenu(cfg.grupo);
+  if(cfg.grupo==='servico_tipo'){
+    const canonicos=new Map();
+    options.forEach(opt=>{
+      const canon=normalizarTipoServico(opt.rotulo);
+      if(!canon || !SERVICO_TIPOS_PERMITIDOS.has(canon)) return;
+      if(!canonicos.has(canon)){
+        canonicos.set(canon,{...opt, rotulo:canon, valor:normalizarValorMenu(canon)});
+      }
+    });
+    options=SERVICO_TIPOS_PADRAO.map(nome=>canonicos.get(nome) || { rotulo:nome, valor:normalizarValorMenu(nome), ordem:0, ativo:true });
+  }
+  if(cfg.grupo==='policial_cargo'){
+    const canonicos=new Map();
+    options.forEach(opt=>{
+      const canon=normalizarCargoPolicial(opt.rotulo);
+      if(!canon) return;
+      if(!canonicos.has(canon)){
+        canonicos.set(canon,{...opt, rotulo:canon, valor:normalizarValorMenu(canon)});
+      }
+    });
+    options=POLICIAL_CARGOS_PADRAO.map(nome=>canonicos.get(nome) || { rotulo:nome, valor:normalizarValorMenu(nome), ordem:0, ativo:true });
+  }
+  if(cfg.grupo==='item_status'){
+    const canonicos=new Map();
+    options.forEach(opt=>{
+      const canon=normalizarStatusItem(opt.rotulo);
+      if(!canon) return;
+      if(!canonicos.has(canon)){
+        canonicos.set(canon,{...opt, rotulo:canon, valor:normalizarValorMenu(canon)});
+      }
+    });
+    options=ITEM_STATUS_PADRAO.map(nome=>canonicos.get(nome) || { rotulo:nome, valor:normalizarValorMenu(nome), ordem:0, ativo:true });
+  }
+  if(!options.length) return;
+  el.innerHTML='';
+  if(cfg.placeholder!==null){
+    const p=document.createElement('option');
+    p.value='';
+    p.textContent=cfg.placeholder||'Selecione...';
+    el.appendChild(p);
+  }
+  options.forEach(opt=>{
+    const o=document.createElement('option');
+    o.value=cfg.valueField==='valor' ? (opt.valor||normalizarValorMenu(opt.rotulo)) : opt.rotulo;
+    o.textContent=opt.rotulo;
+    el.appendChild(o);
+  });
+  if(atual && [...el.options].some(o=>o.value===atual)) el.value=atual;
+}
+
+function aplicarMenusNosSelects(){
+  MENU_BINDINGS.forEach(cfg=>preencherSelectPorGrupo(cfg));
+}
+
+function capturarDefaultsMenusDoHTML(){
+  const defaultsJaCapturados=localStorage.getItem('salt_menu_defaults_captured')==='1';
+  if(defaultsJaCapturados || DB.menuOpcoes.length>0) return;
+
+  let criouPadroes=false;
+  MENU_GROUPS.forEach(grp=>{
+    const jaExiste=DB.menuOpcoes.some(o=>o.grupo===grp.value);
+    if(jaExiste) return;
+
+    const binding=MENU_BINDINGS.find(b=>b.grupo===grp.value);
+    if(!binding) return;
+
+    const sel=document.getElementById(binding.id);
+    if(!sel) return;
+
+    const opcoes=[...sel.options]
+      .map(o=>({
+        valor:String(o.value||'').trim(),
+        rotulo:String(o.textContent||'').trim(),
+      }))
+      .filter(o=>o.valor.length>0 && o.rotulo.length>0);
+
+    opcoes.forEach((opcao,idx)=>{
+      DB.menuOpcoes.push({
+        id: uid(),
+        grupo: grp.value,
+        valor: opcao.valor,
+        rotulo: opcao.rotulo,
+        ordem: idx,
+        ativo: true,
+      });
+      criouPadroes=true;
+    });
+  });
+  if(criouPadroes) salvar('menuOpcoes');
+  localStorage.setItem('salt_menu_defaults_captured','1');
+}
+
+function atualizarMenusInventarioPadrao(force=false){
+  const versao='inventario_2026_06_26_cat_sub_v1';
+  if(!force && localStorage.getItem('salt_inventory_menu_version')===versao) return;
+
+  const gruposAtualizar=['arma_modelo','item_categoria'];
+  DB.menuOpcoes=DB.menuOpcoes.filter(o=>!gruposAtualizar.includes(o.grupo));
+
+  const fontes=[
+    { grupo:'arma_modelo', selectId:'ns-modelo' },
+    { grupo:'item_categoria', selectId:'item-categoria' },
+  ];
+
+  fontes.forEach(fonte=>{
+    const sel=document.getElementById(fonte.selectId);
+    if(!sel) return;
+    [...sel.options]
+      .map(o=>({ valor:String(o.value||'').trim(), rotulo:String(o.textContent||'').trim() }))
+      .filter(o=>o.valor && o.rotulo)
+      .forEach((opcao,idx)=>{
+        DB.menuOpcoes.push({
+          id: uid(),
+          grupo: fonte.grupo,
+          valor: opcao.valor,
+          rotulo: opcao.rotulo,
+          ordem: idx,
+          ativo: true,
+        });
+      });
+  });
+
+  salvar('menuOpcoes');
+  localStorage.setItem('salt_inventory_menu_version',versao);
+}
+
+async function apiRequest(path, opts={}){
+  const config={
+    headers:{'Content-Type':'application/json'},
+    ...opts,
+  };
+  const url=/^https?:\/\//i.test(path) ? path : `${API_BASE_URL}${path}`;
+  const resp=await fetch(url, config);
+  if(!resp.ok){
+    let msg='Erro ao comunicar com backend.';
+    try{
+      const data=await resp.json();
+      if(data && data.detail) msg=data.detail;
+    }catch(_){ }
+    throw new Error(msg);
+  }
+  if(resp.status===204) return null;
+  return resp.json();
+}
+
+async function apiList(path){
+  const first=await apiRequest(path);
+  if(Array.isArray(first)) return first;
+  if(!first || !Array.isArray(first.results)) return [];
+
+  let itens=[...first.results];
+  let nextUrl=first.next;
+  while(nextUrl){
+    const page=await apiRequest(nextUrl);
+    if(!page || !Array.isArray(page.results)){
+      nextUrl=null;
+      continue;
+    }
+    itens=itens.concat(page.results);
+    nextUrl=page.next;
+  }
+  return itens;
+}
+
+async function sincronizarMenusBackend(silencioso=false){
+  try{
+    const data=await apiList('/opcoes-menu/?ordering=grupo,ordem,rotulo');
+    if(Array.isArray(data)){
+      DB.menuOpcoes=data.map(o=>(
+        {
+          id:o.id,
+          grupo:o.grupo,
+          valor:o.valor,
+          rotulo:o.rotulo,
+          ordem:o.ordem||0,
+          ativo:o.ativo!==false,
+        }
+      ));
+      atualizarMenusInventarioPadrao(true);
+      salvar('menuOpcoes');
+      aplicarMenusNosSelects();
+      renderMenusTable();
+      renderResumoMenus();
+      if(!silencioso) alert('Menus sincronizados com o backend.');
+    }
+  }catch(err){
+    if(!silencioso) alert(`Sem conexão com backend. Mantendo dados locais.\n\nDetalhe: ${err.message}`);
+  }
+}
+
+function popularFiltrosMenus(){
+  const selGrupo=document.getElementById('menu-grupo');
+  const filtroGrupo=document.getElementById('filter-menu-grupo');
+  if(selGrupo){
+    const valorAtual=selGrupo.value;
+    selGrupo.innerHTML='';
+    MENU_GROUPS.forEach(g=>{
+      const o=document.createElement('option');
+      o.value=g.value;
+      o.textContent=g.label;
+      selGrupo.appendChild(o);
+    });
+    if(valorAtual) selGrupo.value=valorAtual;
+  }
+  if(filtroGrupo){
+    const valorAtual=filtroGrupo.value;
+    filtroGrupo.innerHTML='<option value="">Todos os grupos</option>';
+    MENU_GROUPS.forEach(g=>{
+      const o=document.createElement('option');
+      o.value=g.value;
+      o.textContent=g.label;
+      filtroGrupo.appendChild(o);
+    });
+    if(valorAtual) filtroGrupo.value=valorAtual;
+  }
+}
+
+function limparFormMenu(){
+  document.getElementById('menu-id').value='';
+  if(document.getElementById('menu-grupo').options.length) document.getElementById('menu-grupo').selectedIndex=0;
+  document.getElementById('menu-rotulo').value='';
+  document.getElementById('menu-valor').value='';
+  document.getElementById('menu-ordem').value='0';
+  document.getElementById('menu-ativo').value='true';
+}
+
+function editarOpcaoMenu(id){
+  const item=DB.menuOpcoes.find(o=>String(o.id)===String(id));
+  if(!item) return;
+  document.getElementById('menu-id').value=item.id;
+  document.getElementById('menu-grupo').value=item.grupo;
+  document.getElementById('menu-rotulo').value=item.rotulo;
+  document.getElementById('menu-valor').value=item.valor;
+  document.getElementById('menu-ordem').value=item.ordem||0;
+  document.getElementById('menu-ativo').value=String(item.ativo!==false);
+}
+
+async function excluirOpcaoMenu(id){
+  if(!confirm('Excluir esta opção de menu?')) return;
+  const atual=DB.menuOpcoes.find(o=>String(o.id)===String(id));
+  if(!atual) return;
+
+  try{
+    if(menuIdBackendValido(atual.id)) await apiRequest(`/opcoes-menu/${atual.id}/`,{ method:'DELETE' });
+  }catch(err){
+    alert(`Falha ao excluir no backend.\n\nDetalhe: ${err.message}`);
+    return;
+  }
+
+  DB.menuOpcoes=DB.menuOpcoes.filter(o=>String(o.id)!==String(id));
+  salvar('menuOpcoes');
+  await sincronizarMenusBackend(true);
+  aplicarMenusNosSelects();
+  renderMenusTable();
+  renderResumoMenus();
+}
+
+async function salvarOpcaoMenu(){
+  const id=document.getElementById('menu-id').value;
+  const grupo=document.getElementById('menu-grupo').value;
+  let rotulo=document.getElementById('menu-rotulo').value.trim();
+  const valorInput=document.getElementById('menu-valor').value.trim();
+  const ordem=parseInt(document.getElementById('menu-ordem').value,10)||0;
+  const ativo=document.getElementById('menu-ativo').value==='true';
+  if(!grupo||!rotulo){
+    alert('Grupo e rótulo são obrigatórios.');
+    return;
+  }
+  if(grupo==='servico_tipo'){
+    const canon=normalizarTipoServico(rotulo);
+    if(!canon){
+      alert('Para "Tipo de Serviço", use apenas: Manutenção, Limpeza, Reposição de Peça ou Reposição de Arma.');
+      return;
+    }
+    rotulo=canon;
+  }
+  if(grupo==='policial_cargo'){
+    const canonCargo=normalizarCargoPolicial(rotulo);
+    if(!canonCargo){
+      alert('Para "Cargo / Posto", use: Delegado de Polícia, Perito, Auxiliar de Perícia, Oficial Investigador de Polícia ou Outro.');
+      return;
+    }
+    rotulo=canonCargo;
+  }
+  if(grupo==='item_status'){
+    const canonStatus=normalizarStatusItem(rotulo);
+    if(!canonStatus){
+      alert('Para "Status do Item", use: Disponível, Em Uso, Em Reparo, Inservível, Extraviado ou Furtado.');
+      return;
+    }
+    rotulo=canonStatus;
+  }
+  const valor=(grupo==='servico_tipo' || grupo==='policial_cargo' || grupo==='item_status')
+    ? normalizarValorMenu(rotulo)
+    : (valorInput || normalizarValorMenu(rotulo));
+  const jaExisteMesmoValor=DB.menuOpcoes.find(o=>
+    String(o.grupo)===String(grupo) &&
+    String(o.valor).toLowerCase()===String(valor).toLowerCase() &&
+    String(o.id)!==String(id||'')
+  );
+  if(jaExisteMesmoValor){
+    alert('Já existe uma opção com este valor técnico neste grupo.');
+    return;
+  }
+  const payload={ grupo, valor, rotulo, ordem, ativo };
+
+  let salvo={ id:id||uid(), ...payload };
+  try{
+    if(menuIdBackendValido(id)){
+      const resp=await apiRequest(`/opcoes-menu/${id}/`,{ method:'PATCH', body:JSON.stringify(payload) });
+      salvo={ id:resp.id, grupo:resp.grupo, valor:resp.valor, rotulo:resp.rotulo, ordem:resp.ordem||0, ativo:resp.ativo!==false };
+    }else{
+      const resp=await apiRequest('/opcoes-menu/',{ method:'POST', body:JSON.stringify(payload) });
+      salvo={ id:resp.id, grupo:resp.grupo, valor:resp.valor, rotulo:resp.rotulo, ordem:resp.ordem||0, ativo:resp.ativo!==false };
+    }
+  }catch(err){
+    alert(`Falha ao salvar no backend.\n\nDetalhe: ${err.message}`);
+    return;
+  }
+
+  const existeIdx=DB.menuOpcoes.findIndex(o=>String(o.id)===String(salvo.id));
+  if(existeIdx>=0) DB.menuOpcoes[existeIdx]=salvo;
+  else DB.menuOpcoes.push(salvo);
+
+  salvar('menuOpcoes');
+  await sincronizarMenusBackend(true);
+  limparFormMenu();
+  aplicarMenusNosSelects();
+  renderMenusTable();
+  renderResumoMenus();
+}
+
+function renderMenusTable(){
+  const tbody=document.getElementById('tbody-menus');
+  if(!tbody) return;
+  const txt=(document.getElementById('filter-menu-text')||{}).value?.toLowerCase()||'';
+  const grupo=(document.getElementById('filter-menu-grupo')||{}).value||'';
+  const ativoSel=(document.getElementById('filter-menu-ativo')||{}).value||'';
+
+  let arr=[...DB.menuOpcoes];
+  arr=arr.filter(o=>{
+    const q=`${o.grupo} ${o.rotulo} ${o.valor}`.toLowerCase();
+    const okTxt=!txt || q.includes(txt);
+    const okGrupo=!grupo || o.grupo===grupo;
+    const okAtivo=ativoSel==='' || String(o.ativo!==false)===ativoSel;
+    return okTxt && okGrupo && okAtivo;
+  }).sort((a,b)=>String(a.grupo).localeCompare(String(b.grupo),'pt') || (a.ordem||0)-(b.ordem||0) || String(a.rotulo).localeCompare(String(b.rotulo),'pt'));
+
+  if(!arr.length){
+    tbody.innerHTML='<tr><td colspan="6" class="text-center" style="padding:20px;color:#999">Nenhuma opção cadastrada</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML=arr.map(r=>`
+    <tr>
+      <td>${(MENU_GROUPS.find(g=>g.value===r.grupo)||{}).label||r.grupo}</td>
+      <td><b>${r.rotulo}</b></td>
+      <td>${r.valor}</td>
+      <td>${r.ordem||0}</td>
+      <td>${r.ativo!==false?badgeStatus('Disponível'):badgeStatus('Inservível')}</td>
+      <td>
+        <button class="btn btn-xs btn-outline" onclick="editarOpcaoMenu('${r.id}')">✏️</button>
+        <button class="btn btn-xs btn-danger" onclick="excluirOpcaoMenu('${r.id}')">🗑️</button>
+      </td>
+    </tr>`).join('');
+}
+
+function renderResumoMenus(){
+  const total=DB.menuOpcoes.length;
+  const ativas=DB.menuOpcoes.filter(o=>o.ativo!==false).length;
+  const inativas=total-ativas;
+  const gruposComDados=new Set(DB.menuOpcoes.map(o=>o.grupo).filter(Boolean)).size;
+
+  const setTxt=(id,val)=>{
+    const el=document.getElementById(id);
+    if(el) el.textContent=String(val);
+  };
+  setTxt('menu-total-opcoes', total);
+  setTxt('menu-total-ativas', ativas);
+  setTxt('menu-total-inativas', inativas);
+  setTxt('menu-total-grupos', gruposComDados);
+}
+
+async function abrirAbaMenus(){
+  carregarConfigBackendMenus();
+  popularFiltrosMenus();
+  renderMenusTable();
+  renderResumoMenus();
+  await sincronizarMenusBackend(true);
+  renderMenusTable();
+  renderResumoMenus();
+}
+
+async function testarConexaoBackendMenus(){
+  try{
+    const input=document.getElementById('menu-api-base');
+    if(!input) return;
+    const base=normalizarApiBase(input.value);
+    if(!base){
+      alert('Informe a URL base da API.');
+      return;
+    }
+    API_BASE_URL=base;
+    localStorage.setItem('salt_api_base', base);
+    input.value=base;
+    const data=await apiList('/opcoes-menu/');
+    const qtd=Array.isArray(data) ? data.length : 0;
+    await sincronizarMenusBackend(true);
+    alert(`Conexão realizada com sucesso.\n\n${qtd} opção(ões) recebida(s) do backend.`);
+  }catch(err){
+    alert(`Falha ao conectar com o backend.\n\nDetalhe: ${err.message}`);
+  }
+}
+
+function nextServicoId(){
+  const max=DB.servicos.reduce((acc,s)=>Math.max(acc, parseInt(s.id,10)||0),0);
+  return String(max+1).padStart(4,'0');
+}
+
+function nextNumeroCautela(){
+  const ano=String(new Date().getFullYear());
+  const max=DB.cautelas.reduce((acc,c)=>{
+    if(!c.numero) return acc;
+    const m=String(c.numero).match(/^CAU-(\d{4})-(\d+)$/);
+    if(!m||m[1]!==ano) return acc;
+    return Math.max(acc, parseInt(m[2],10)||0);
+  },0);
+  return `CAU-${ano}-${String(max+1).padStart(4,'0')}`;
+}
+
+// ═══════════════════════════════════════════════════════
+//  NAVEGAÇÃO
+// ═══════════════════════════════════════════════════════
+function navigate(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.sidebar-item').forEach(s=>s.classList.remove('active'));
+  const pg = document.getElementById(id);
+  if(pg) pg.classList.add('active');
+  document.querySelectorAll('.sidebar-item').forEach(s=>{
+    if(s.getAttribute('onclick') && s.getAttribute('onclick').includes(id)) s.classList.add('active');
+  });
+  if(id==='pg-dash-servicos')  renderDashServicos();
+  if(id==='pg-dash-estoque')   renderDashEstoque();
+  if(id==='pg-registros')      renderServicosTable();
+  if(id==='pg-cautelas')       { renderCautelasTable('abertas'); renderCautelasTable('historico'); }
+  if(id==='pg-relatorios')     populateRelFiltros();
+  if(id==='pg-cad-policiais')  renderPoliciaisTable();
+  if(id==='pg-cad-lotacao')    renderLotacoesTable();
+  if(id==='pg-cad-itens')      renderItensTable();
+  if(id==='pg-cad-fornecedor') renderFornecedoresTable();
+  aplicarMenusNosSelects();
+  if(id==='pg-cad-menus')      { abrirAbaMenus(); }
+  if(id==='pg-novo-servico')   { populateDeptos(); }
+}
+
+function switchTab(grupo, tab, btn){
+  document.querySelectorAll(`[id^="tab-${grupo}-"]`).forEach(p=>p.classList.remove('active'));
+  btn.closest('.tab-bar').querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById(`tab-${grupo}-${tab}`).classList.add('active');
+  btn.classList.add('active');
+  if(grupo==='cautelas'){
+    if(tab==='abertas')   renderCautelasTable('abertas');
+    if(tab==='historico') renderCautelasTable('historico');
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  MODAIS
+// ═══════════════════════════════════════════════════════
+function abrirModal(id){ document.getElementById(id).classList.add('open'); }
+function fecharModal(id){ document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(o=>{
+  o.addEventListener('click', e=>{ if(e.target===o) o.classList.remove('open'); });
+});
+
+// ═══════════════════════════════════════════════════════
+//  BADGES / LABELS
+// ═══════════════════════════════════════════════════════
+function badgeStatus(s){
+  const statusItemCanon={
+    'Em Cautela':'Em Uso',
+    'Baixado':'Inservível',
+    'Perdido':'Extraviado',
+  };
+  const statusLabel=statusItemCanon[s]||s;
+  const m={
+    'Aberto':'badge-red','Em Andamento':'badge-orange','Aguardando Peça':'badge-blue',
+    'Aguardando Teste':'badge-purple','Concluído':'badge-green',
+    'Ativa':'badge-orange','Devolvido':'badge-green','Vencida':'badge-red','Extraviado':'badge-red','Furtado':'badge-red',
+    'Disponível':'badge-green','Em Uso':'badge-orange','Em Reparo':'badge-blue','Inservível':'badge-gray','Extraviado':'badge-red','Furtado':'badge-red',
+    'Em Cautela':'badge-orange','Baixado':'badge-gray','Perdido':'badge-red'
+  };
+  return `<span class="badge ${m[statusLabel]||'badge-gray'}">${statusLabel}</span>`;
+}
+
+function normalizarStatusItem(status){
+  const key=normalizarValorMenu(status).replace(/_+/g,'_');
+  if(key==='disponivel') return 'Disponível';
+  if(key==='em_uso' || key==='em_cautela') return 'Em Uso';
+  if(key==='em_reparo') return 'Em Reparo';
+  if(key==='inservivel' || key==='baixado') return 'Inservível';
+  if(key==='extraviado' || key==='perdido') return 'Extraviado';
+  if(key==='furtado') return 'Furtado';
+  if(status==='Em Cautela') return 'Em Uso';
+  if(status==='Baixado') return 'Inservível';
+  if(status==='Perdido') return 'Extraviado';
+  return status;
+}
+
+function subcategoriasPorCategoria(categoria){
+  if (!categoria) return [];
+  return opcoesMenu(`item_subcategoria_${categoria}`);
+}
+
+function popularSubcategoriasSelect(selectId, categoria, placeholder='Selecione...'){
+  const sel=document.getElementById(selectId);
+  if(!sel) return;
+  const atual=sel.value;
+  sel.innerHTML=`<option value="">${placeholder}</option>`;
+  subcategoriasPorCategoria(categoria).forEach(sc=>{
+    const o=document.createElement('option');
+    o.value=sc.valor;
+    o.textContent=sc.rotulo;
+    sel.appendChild(o);
+  });
+  if(atual && [...sel.options].some(o=>o.value===atual)) sel.value=atual;
+}
+
+function classificarItemInventario(item){
+  const cat=String(item?.categoria||'').trim();
+  const sub=String(item?.subcategoria||'').trim();
+  if(['armas','coletes','equipamentos','uniformes','municoes'].includes(cat)){
+    const primeira=subcategoriasPorCategoria(cat)[0];
+    return { categoria:cat, subcategoria:sub || (primeira ? primeira.valor : '') };
+  }
+  const mapa={
+    arma_pistola:{categoria:'armas',subcategoria:'pistola'},
+    arma_fuzil:{categoria:'armas',subcategoria:'fuzil'},
+    arma_fuzil_sniper:{categoria:'armas',subcategoria:'fuzil_sniper'},
+    arma_carabina:{categoria:'armas',subcategoria:'carabina'},
+    arma_espingarda:{categoria:'armas',subcategoria:'espingarda'},
+    arma:{categoria:'armas',subcategoria:'pistola'},
+    colete:{categoria:'coletes',subcategoria:'protecta'},
+    equip_radio:{categoria:'equipamentos',subcategoria:'radio_comunicador'},
+    equip_drone:{categoria:'equipamentos',subcategoria:'drone'},
+    equip_detector_metal:{categoria:'equipamentos',subcategoria:'detector_metal'},
+    equip_algema:{categoria:'equipamentos',subcategoria:'algema'},
+    equip_kit_arrombamento:{categoria:'equipamentos',subcategoria:'kit_arrombamento'},
+    radio:{categoria:'equipamentos',subcategoria:'radio_comunicador'},
+    drone:{categoria:'equipamentos',subcategoria:'drone'},
+    detector:{categoria:'equipamentos',subcategoria:'detector_metal'},
+    algema:{categoria:'equipamentos',subcategoria:'algema'},
+    kit_arromb:{categoria:'equipamentos',subcategoria:'kit_arrombamento'},
+    uniforme_calca_tatica:{categoria:'uniformes',subcategoria:'calca_tatica'},
+    uniforme_camisa_gola_polo:{categoria:'uniformes',subcategoria:'camisa_gola_polo'},
+    uniforme_cinto_bdu:{categoria:'uniformes',subcategoria:'cinto_bdu'},
+    uniforme_cinto_guarnicao:{categoria:'uniformes',subcategoria:'cinto_guarnicao'},
+    uniforme_combat_shirt:{categoria:'uniformes',subcategoria:'combat_shirt'},
+    uniforme_jaqueta_tatica:{categoria:'uniformes',subcategoria:'jaqueta_tatica'},
+    uniforme_capa_chuva:{categoria:'uniformes',subcategoria:'capa_chuva'},
+    uniforme_bota_tatica:{categoria:'uniformes',subcategoria:'bota_tatica'},
+    calca_tatica:{categoria:'uniformes',subcategoria:'calca_tatica'},
+    polo:{categoria:'uniformes',subcategoria:'camisa_gola_polo'},
+    cinto_tatico:{categoria:'uniformes',subcategoria:'cinto_bdu'},
+    jaqueta:{categoria:'uniformes',subcategoria:'jaqueta_tatica'},
+    capa_chuva:{categoria:'uniformes',subcategoria:'capa_chuva'},
+    bota_tatica:{categoria:'uniformes',subcategoria:'bota_tatica'},
+    municao_9mm:{categoria:'municoes',subcategoria:'9mm'},
+    municao_40:{categoria:'municoes',subcategoria:'40'},
+    municao_556x45:{categoria:'municoes',subcategoria:'556x45'},
+    municao_12:{categoria:'municoes',subcategoria:'12'},
+    municao:{categoria:'municoes',subcategoria:'9mm'},
+  };
+  return mapa[cat] || { categoria:'armas', subcategoria:'pistola' };
+}
+
+function onCategoriaItemChange(){
+  const cat=document.getElementById('item-categoria').value;
+  popularSubcategoriasSelect('item-subcategoria',cat,'Selecione...');
+  toggleCamposCategoria();
+}
+
+function onCategoriaCautelaChange(){
+  const cat=document.getElementById('caut-cat').value;
+  popularSubcategoriasSelect('caut-subcategoria',cat,'Todas da categoria');
+  filtrarItensCautela();
+}
+
+function labelCategoria(c){
+  const m={
+    armas:'🔫 Armas',
+    coletes:'🛡️ Coletes',
+    equipamentos:'🧰 Equipamentos',
+    uniformes:'👕 Uniformes',
+    municoes:'🟡 Munições'
+  };
+  if(m[c]) return m[c];
+  const cls=classificarItemInventario({categoria:c});
+  return m[cls.categoria] || c;
+}
+
+function labelSubcategoria(subcategoria){
+  const mapa={
+    pistola:'Pistola', fuzil:'Fuzil', fuzil_sniper:'Fuzil Sniper', carabina:'Carabina', espingarda:'Espingarda',
+    protecta:'Protecta', imbraland:'Imbraland',
+    radio_comunicador:'Rádio Comunicador', drone:'Drone', detector_metal:'Detector de Metal', algema:'Algema', kit_arrombamento:'Kit Arrombamento',
+    calca_tatica:'Calça Tática', camisa_gola_polo:'Camisa Gola Polo', cinto_bdu:'Cinto BDU', cinto_guarnicao:'Cinto de Guarnição',
+    combat_shirt:'Combat Shirt', jaqueta_tatica:'Jaqueta Tática', capa_chuva:'Capa de Chuva', bota_tatica:'Bota Tática',
+    '9mm':'9mm', '40':'.40', '556x45':'5,56x45', '12':'12'
+  };
+  return mapa[subcategoria] || subcategoria || '—';
+}
+
+function labelCategoriaSubcategoria(categoria,subcategoria){
+  if(!subcategoria){
+    const cls=classificarItemInventario({categoria,subcategoria});
+    if(cls.subcategoria) return `${labelCategoria(cls.categoria)} · ${labelSubcategoria(cls.subcategoria)}`;
+    return labelCategoria(cls.categoria);
+  }
+  return `${labelCategoria(categoria)} · ${labelSubcategoria(subcategoria)}`;
+}
+
+function badgeValidade(dtVal){
+  if(!dtVal) return '—';
+  const dias=diasParaData(dtVal);
+  if(dias===null) return fmtData(dtVal);
+  if(dias<0) return `<span class="badge badge-red">Vencido (${fmtData(dtVal)})</span>`;
+  if(dias<=30) return `<span class="badge badge-orange">Vence em ${dias}d</span>`;
+  return `<span class="badge badge-green">${fmtData(dtVal)}</span>`;
+}
+
+// ═══════════════════════════════════════════════════════
+//  PAGINAÇÃO GENÉRICA
+// ═══════════════════════════════════════════════════════
+function renderPaginacao(containerId, total, pagKey, onPage){
+  const perPage = 150;
+  const totalPag = Math.ceil(total/perPage) || 1;
+  if(!PAG[pagKey]) PAG[pagKey]=1;
+  if(PAG[pagKey]>totalPag) PAG[pagKey]=1;
+  const cont = document.getElementById(containerId);
+  if(!cont) return;
+  cont.innerHTML='';
+  if(totalPag<=1){
+    cont.innerHTML=`<span class="pagination-info">${total} registro(s)</span>`;
+    return;
+  }
+  const mk=(p,label)=>{
+    const b=document.createElement('button');
+    b.textContent=label||p;
+    if(p===PAG[pagKey]) b.classList.add('active');
+    b.onclick=()=>{ PAG[pagKey]=p; onPage(); };
+    cont.appendChild(b);
+  };
+  if(PAG[pagKey]>1) mk(PAG[pagKey]-1,'‹');
+  for(let i=1;i<=totalPag;i++){
+    if(i===1||i===totalPag||Math.abs(i-PAG[pagKey])<=2) mk(i);
+    else if(Math.abs(i-PAG[pagKey])===3){ const sp=document.createElement('span'); sp.textContent='…'; sp.style.padding='0 4px'; cont.appendChild(sp); }
+  }
+  if(PAG[pagKey]<totalPag) mk(PAG[pagKey]+1,'›');
+  const info=document.createElement('span');
+  info.className='pagination-info';
+  const s=(PAG[pagKey]-1)*perPage+1, e=Math.min(PAG[pagKey]*perPage,total);
+  info.textContent=`${s}-${e} de ${total}`;
+  cont.appendChild(info);
+}
+
+function getPaged(arr, pagKey){
+  const perPage=150;
+  if(!PAG[pagKey]) PAG[pagKey]=1;
+  return arr.slice((PAG[pagKey]-1)*perPage, PAG[pagKey]*perPage);
+}
+
+// ═══════════════════════════════════════════════════════
+//  ORDENAÇÃO
+// ═══════════════════════════════════════════════════════
+function sortTable(ds, col){
+  if(SORT[ds]&&SORT[ds].col===col) SORT[ds].asc=!SORT[ds].asc;
+  else SORT[ds]={col,asc:true};
+  if(ds==='servicos')     renderServicosTable();
+  if(ds==='policiais')    renderPoliciaisTable();
+  if(ds==='lotacoes')     renderLotacoesTable();
+  if(ds==='itens')        renderItensTable();
+  if(ds==='fornecedores') renderFornecedoresTable();
+}
+
+function sortArr(arr, ds){
+  if(!SORT[ds]) return arr;
+  const {col,asc}=SORT[ds];
+  return [...arr].sort((a,b)=>{
+    const va=String(a[col]||'').toLowerCase(), vb=String(b[col]||'').toLowerCase();
+    return asc ? va.localeCompare(vb,'pt') : vb.localeCompare(va,'pt');
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  CHART BARS
+// ═══════════════════════════════════════════════════════
+function renderChartBars(containerId, data, colorFn){
+  const c=document.getElementById(containerId);
+  if(!c) return;
+  const max=Math.max(...data.map(d=>d.val),1);
+  c.innerHTML = data.length===0
+    ? '<p style="color:#999;font-size:.82rem;text-align:center;padding:20px">Sem dados</p>'
+    : data.map(d=>`
+      <div class="chart-bar-item">
+        <span class="chart-bar-label" title="${d.label}">${d.label}</span>
+        <div class="chart-bar-track"><div class="chart-bar-fill" style="width:${Math.round(d.val/max*100)}%;${colorFn?'background:'+colorFn(d.label):''}"></div></div>
+        <span class="chart-bar-val">${d.val}</span>
+      </div>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+//  POPULADORES DE SELECT (DEPARTAMENTO → LOTAÇÃO)
+// ═══════════════════════════════════════════════════════
+function populateDeptos(){
+  const deptos=[...new Set(DB.lotacoes.map(l=>l.depto))].sort();
+  ['ns-depto','caut-depto','pol-depto','edit-depto'].forEach(id=>{
+    const el=document.getElementById(id); if(!el) return;
+    const val=el.value;
+    el.innerHTML='<option value="">Selecione...</option>';
+    deptos.forEach(d=>{ const o=document.createElement('option'); o.value=o.textContent=d; el.appendChild(o); });
+    el.value=val;
+  });
+}
+
+function updateLotacaoServico(){
+  const dep=document.getElementById('ns-depto').value;
+  const sel=document.getElementById('ns-lotacao');
+  sel.innerHTML='<option value="">Selecione...</option>';
+  DB.lotacoes.filter(l=>l.depto===dep).forEach(l=>{
+    const o=document.createElement('option'); o.value=o.textContent=l.nome; sel.appendChild(o);
+  });
+}
+
+function updateLotacaoModal(deptoId, lotacaoId){
+  const dep=document.getElementById(deptoId).value;
+  const sel=document.getElementById(lotacaoId);
+  sel.innerHTML='<option value="">Selecione...</option>';
+  DB.lotacoes.filter(l=>l.depto===dep).forEach(l=>{
+    const o=document.createElement('option'); o.value=o.textContent=l.nome; sel.appendChild(o);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  AUTO-FILL POLICIAL POR MATRÍCULA
+// ═══════════════════════════════════════════════════════
+function autoFillPolicial(prefix){
+  const mat=document.getElementById(`${prefix}-matricula`).value.trim();
+  const pol=DB.policiais.find(p=>p.matricula===mat);
+  if(pol){
+    const fn=n=>document.getElementById(n);
+    if(fn(`${prefix}-policial`)) fn(`${prefix}-policial`).value=pol.nome;
+    if(fn(`${prefix}-depto`)){
+      fn(`${prefix}-depto`).value=pol.depto;
+      updateLotacaoServico();
+      setTimeout(()=>{ if(fn(`${prefix}-lotacao`)) fn(`${prefix}-lotacao`).value=pol.lotacao; },50);
+    }
+  }
+}
+
+function autoFillCautela(){
+  const mat=document.getElementById('caut-matricula').value.trim();
+  const pol=DB.policiais.find(p=>p.matricula===mat);
+  if(pol){
+    document.getElementById('caut-policial').value=pol.nome;
+    populateDeptos();
+    document.getElementById('caut-depto').value=pol.depto;
+    updateLotacaoModal('caut-depto','caut-lotacao');
+    setTimeout(()=>{ document.getElementById('caut-lotacao').value=pol.lotacao; },50);
+  }
+}
+
+function itemSemSerie(item){
+  if(!item) return false;
+  const cls=classificarItemInventario(item);
+  if(cls.categoria==='uniformes' || cls.categoria==='municoes') return true;
+  const txt=`${item.descricao||''} ${item.marca||''} ${item.modelo||''}`.toLowerCase();
+  const termos=['calça tática','calca tatica','camisa gola polo','cinto bdu','cinto de guarnição','cinto de guarnicao','combat shirt','jaqueta tática','jaqueta tatica','capa de chuva','bota tática','bota tatica','munição 9mm','municao 9mm','munição .40','municao .40','munição 5,56x45','municao 5,56x45','munição 12','municao 12'];
+  return termos.some(t=>txt.includes(t));
+}
+
+function categoriaCompativelInventario(itemCat, filtroCat){
+  const cls=classificarItemInventario({categoria:itemCat});
+  return String(cls.categoria||'')===String(filtroCat||'');
+}
+
+// ═══════════════════════════════════════════════════════
+//  FILTRAR ITENS POR CATEGORIA NA CAUTELA
+// ═══════════════════════════════════════════════════════
+function filtrarItensCautela(){
+  const cat=document.getElementById('caut-cat').value;
+  const sub=document.getElementById('caut-subcategoria').value;
+  const sel=document.getElementById('caut-item');
+  sel.innerHTML='<option value="">Selecione o item</option>';
+  if(!cat){
+    sel.innerHTML='<option value="">Selecione a categoria primeiro</option>';
+    document.getElementById('caut-serie').value='';
+    document.getElementById('caut-disp').value='';
+    return;
+  }
+  DB.itens.filter(i=>{
+    const cls=classificarItemInventario(i);
+    return (!cat || cls.categoria===cat) && (!sub || cls.subcategoria===sub) && i.qtdDisp>0;
+  }).forEach(i=>{
+    const o=document.createElement('option');
+    o.value=i.id;
+    o.textContent=`${i.descricao}${i.marca?' — '+i.marca:''}`;
+    sel.appendChild(o);
+  });
+  document.getElementById('caut-serie').value='';
+  document.getElementById('caut-disp').value='';
+}
+
+function sincronizarItemPorSerie(){
+  const cat=document.getElementById('caut-cat').value;
+  const sub=document.getElementById('caut-subcategoria').value;
+  const serieDigitada=(document.getElementById('caut-serie').value||'').trim().toLowerCase();
+  const sel=document.getElementById('caut-item');
+  if(!cat || !serieDigitada){
+    validarEstoqueCautela();
+    return;
+  }
+  const candidatos=DB.itens.filter(i=>{
+    const cls=classificarItemInventario(i);
+    return (!cat || cls.categoria===cat) && (!sub || cls.subcategoria===sub) && i.qtdDisp>0;
+  });
+  const normalizar=v=>String(v||'').trim().toLowerCase();
+  const porSerieExata=candidatos.find(i=>normalizar(i.serie)===serieDigitada);
+  const porPatrimonioExato=candidatos.find(i=>normalizar(i.patrimonio)===serieDigitada);
+  const porSerieParcial=candidatos.filter(i=>normalizar(i.serie).includes(serieDigitada));
+  const porPatrimonioParcial=candidatos.filter(i=>normalizar(i.patrimonio).includes(serieDigitada));
+  const item=porSerieExata || porPatrimonioExato || (porSerieParcial.length===1 ? porSerieParcial[0] : null) || (porPatrimonioParcial.length===1 ? porPatrimonioParcial[0] : null);
+  if(item){
+    sel.value=item.id;
+    document.getElementById('caut-disp').value=item.qtdDisp;
+  }else{
+    sel.value='';
+    document.getElementById('caut-disp').value='';
+  }
+  validarEstoqueCautela();
+}
+
+function preencherDadosItem(){
+  const id=document.getElementById('caut-item').value;
+  const item=DB.itens.find(i=>i.id===id);
+  if(item){
+    const campoSerie=document.getElementById('caut-serie');
+    if(!campoSerie.value.trim()){
+      campoSerie.value=itemSemSerie(item) ? 'Não se aplica' : (item.serie||item.patrimonio||'');
+    }
+    document.getElementById('caut-disp').value=item.qtdDisp;
+  }
+  validarEstoqueCautela();
+}
+
+function validarEstoqueCautela(){
+  const id=document.getElementById('caut-item').value;
+  const item=DB.itens.find(i=>i.id===id);
+  const qtd=parseInt(document.getElementById('caut-qtd').value)||0;
+  const alertEl=document.getElementById('alert-caut-estoque');
+  if(item && qtd>item.qtdDisp){ alertEl.style.display='block'; }
+  else { alertEl.style.display='none'; }
+}
+
+// ═══════════════════════════════════════════════════════
+//  DASHBOARD SERVIÇOS
+// ═══════════════════════════════════════════════════════
+function renderDashServicos(){
+  const s=DB.servicos;
+  document.getElementById('ds-total').textContent=s.length;
+  document.getElementById('ds-aberto').textContent=s.filter(x=>x.status==='Aberto').length;
+  document.getElementById('ds-andamento').textContent=s.filter(x=>x.status==='Em Andamento').length;
+  document.getElementById('ds-peca').textContent=s.filter(x=>x.status==='Aguardando Peça').length;
+  document.getElementById('ds-teste').textContent=s.filter(x=>x.status==='Aguardando Teste').length;
+  document.getElementById('ds-concluido').textContent=s.filter(x=>x.status==='Concluído').length;
+
+  // Chart armeiro
+  const byArmeiro={};
+  s.forEach(x=>{ byArmeiro[x.armeiro]=(byArmeiro[x.armeiro]||0)+1; });
+  renderChartBars('chart-armeiro', Object.entries(byArmeiro).map(([k,v])=>({label:k,val:v})));
+
+  // Chart tipo
+  const byTipo={};
+  s.forEach(x=>{ byTipo[x.tipo]=(byTipo[x.tipo]||0)+1; });
+  renderChartBars('chart-tipo', Object.entries(byTipo).map(([k,v])=>({label:k,val:v})));
+
+  // Últimos 10
+  const tbody=document.getElementById('tbody-dash-servicos');
+  const ultimos=[...s].sort((a,b)=>b.id.localeCompare(a.id)).slice(0,10);
+  if(!ultimos.length){ tbody.innerHTML='<tr><td colspan="8" class="text-center" style="padding:20px;color:#999">Nenhum registro</td></tr>'; return; }
+  tbody.innerHTML=ultimos.map(r=>`
+    <tr>
+      <td>${r.id}</td><td>${fmtData(r.dataRec)}</td><td>${r.armeiro||'—'}</td>
+      <td>${r.tipo||'—'}</td><td>${r.policial||'—'}</td><td>${r.modelo||'—'}</td>
+      <td>${r.serie||'—'}</td><td>${badgeStatus(r.status)}</td>
+    </tr>`).join('');
+}
+
+function filterServicos(status){
+  navigate('pg-registros');
+  const el=document.getElementById('filter-serv-status');
+  if(el) el.value=status;
+  renderServicosTable();
+}
+
+// ═══════════════════════════════════════════════════════
+//  TABELA SERVIÇOS
+// ═══════════════════════════════════════════════════════
+function renderServicosTable(){
+  aplicarMenusNosSelects();
+
+  const txt=(document.getElementById('filter-serv-text')||{}).value?.toLowerCase()||'';
+  const st=(document.getElementById('filter-serv-status')||{}).value||'';
+  const tp=(document.getElementById('filter-serv-tipo')||{}).value||'';
+  const ar=(document.getElementById('filter-serv-armeiro')||{}).value||'';
+
+  // Populate filter selects
+  const tipos=[...new Set(DB.servicos.map(s=>s.tipo).filter(Boolean))];
+  const armeiros=[...new Set(DB.servicos.map(s=>s.armeiro).filter(Boolean))];
+  const selTipo=document.getElementById('filter-serv-tipo');
+  const selArm=document.getElementById('filter-serv-armeiro');
+  if(selTipo && selTipo.options.length<=1){
+    tipos.forEach(t=>{ const o=document.createElement('option'); o.value=o.textContent=t; selTipo.appendChild(o); });
+  }
+  if(selArm && selArm.options.length<=1){
+    armeiros.forEach(a=>{ const o=document.createElement('option'); o.value=o.textContent=a; selArm.appendChild(o); });
+  }
+
+  let arr=DB.servicos.filter(s=>{
+    const q=`${s.id} ${s.policial} ${s.matricula} ${s.modelo} ${s.serie} ${s.depto} ${s.lotacao} ${s.tipo} ${s.armeiro}`.toLowerCase();
+    return (!txt||q.includes(txt))&&(!st||s.status===st)&&(!tp||s.tipo===tp)&&(!ar||s.armeiro===ar);
+  });
+  arr=sortArr(arr,'servicos');
+
+  const tbody=document.getElementById('tbody-servicos');
+  const paged=getPaged(arr,'pag-servicos-tbl');
+  if(!arr.length){ tbody.innerHTML='<tr><td colspan="11" class="text-center" style="padding:20px;color:#999">Nenhum registro encontrado</td></tr>'; }
+  else {
+    tbody.innerHTML=paged.map(r=>`
+      <tr>
+        <td><b>${r.id}</b></td><td>${fmtData(r.dataRec)}</td><td>${r.armeiro||'—'}</td>
+        <td>${r.tipo||'—'}</td><td>${r.matricula||'—'}</td><td>${r.policial||'—'}</td>
+        <td style="max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.depto||'—'}</td>
+        <td>${r.modelo||'—'}</td><td>${r.serie||'—'}</td><td>${badgeStatus(r.status)}</td>
+        <td>
+          <button class="btn btn-xs btn-info" onclick="verServico('${r.id}')">👁️</button>
+          <button class="btn btn-xs btn-outline" onclick="editarServico('${r.id}')">✏️</button>
+          <button class="btn btn-xs btn-danger" onclick="excluirServico('${r.id}')">🗑️</button>
+        </td>
+      </tr>`).join('');
+  }
+  renderPaginacao('pag-servicos', arr.length, 'pag-servicos-tbl', renderServicosTable);
+}
+
+// ═══════════════════════════════════════════════════════
+//  SALVAR / EDITAR / EXCLUIR SERVIÇO
+// ═══════════════════════════════════════════════════════
+function salvarServico(){
+  const campos=['ns-tipo','ns-armeiro','ns-data-rec','ns-status','ns-matricula','ns-policial','ns-depto','ns-lotacao','ns-modelo','ns-serie'];
+  const vals={};
+  let ok=true;
+  campos.forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el||!el.value.trim()){ ok=false; }
+    else vals[id]=el.value.trim();
+  });
+  const alertOk=document.getElementById('alert-servico-ok');
+  const alertErr=document.getElementById('alert-servico-err');
+  if(!ok){ alertErr.classList.add('show'); setTimeout(()=>alertErr.classList.remove('show'),3000); return; }
+
+  const reg={
+    id: nextServicoId(),
+    tipo:vals['ns-tipo'], armeiro:vals['ns-armeiro'],
+    dataRec:vals['ns-data-rec'], dataDev:document.getElementById('ns-data-dev').value,
+    status:vals['ns-status'], motivo:document.getElementById('ns-motivo').value,
+    matricula:vals['ns-matricula'], policial:vals['ns-policial'],
+    depto:vals['ns-depto'], lotacao:vals['ns-lotacao'],
+    modelo:vals['ns-modelo'], serie:vals['ns-serie'],
+    descricao:document.getElementById('ns-descricao').value,
+    pecas:document.getElementById('ns-pecas').value,
+    criadoEm: new Date().toISOString()
+  };
+  DB.servicos.push(reg);
+  salvar('servicos');
+  alertOk.classList.add('show');
+  setTimeout(()=>alertOk.classList.remove('show'),3000);
+  limparFormServico();
+  renderDashServicos();
+}
+
+function limparFormServico(){
+  ['ns-tipo','ns-armeiro','ns-data-rec','ns-data-dev','ns-status','ns-motivo',
+   'ns-matricula','ns-policial','ns-depto','ns-modelo','ns-serie','ns-descricao','ns-pecas'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('ns-lotacao').innerHTML='<option value="">Selecione o departamento primeiro</option>';
+}
+
+function verServico(id){
+  const r=DB.servicos.find(s=>s.id===id); if(!r) return;
+  document.getElementById('modal-view-servico-body').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:.87rem">
+      ${[['ID',r.id],['Tipo',r.tipo],['Armeiro',r.armeiro],['Status',badgeStatus(r.status)],
+         ['Data Rec.',fmtData(r.dataRec)],['Data Dev.',fmtData(r.dataDev)],
+         ['Motivo',r.motivo||'—'],['Matrícula',r.matricula||'—'],
+         ['Policial',r.policial||'—'],['Departamento',r.depto||'—'],
+         ['Lotação',r.lotacao||'—'],['Modelo',r.modelo||'—'],
+         ['Nº Série',r.serie||'—'],['Criado em',fmtData((r.criadoEm||'').slice(0,10))]
+        ].map(([l,v])=>`<div><b style="color:var(--primary);font-size:.75rem">${l}</b><br>${v}</div>`).join('')}
+      <div style="grid-column:1/-1"><b style="color:var(--primary);font-size:.75rem">Descrição</b><br>${r.descricao||'—'}</div>
+      <div style="grid-column:1/-1"><b style="color:var(--primary);font-size:.75rem">Peças Substituídas</b><br>${r.pecas||'—'}</div>
+    </div>`;
+  abrirModal('modal-view-servico');
+}
+
+function editarServico(id){
+  const r=DB.servicos.find(s=>s.id===id); if(!r) return;
+  aplicarMenusNosSelects();
+  document.getElementById('edit-serv-id').value=id;
+  populateDeptos();
+  const campos={
+    'edit-tipo':r.tipo,'edit-armeiro':r.armeiro,'edit-data-rec':r.dataRec,
+    'edit-data-dev':r.dataDev,'edit-status':r.status,'edit-motivo':r.motivo,
+    'edit-matricula':r.matricula,'edit-policial':r.policial,'edit-depto':r.depto,
+    'edit-modelo':r.modelo,'edit-serie':r.serie,'edit-descricao':r.descricao,'edit-pecas':r.pecas
+  };
+  Object.entries(campos).forEach(([k,v])=>{ const el=document.getElementById(k); if(el) el.value=v||''; });
+  document.getElementById('edit-depto').value=r.depto||'';
+  updateLotacaoModal('edit-depto','edit-lotacao');
+  setTimeout(()=>{ document.getElementById('edit-lotacao').value=r.lotacao||''; },50);
+  abrirModal('modal-edit-servico');
+}
+
+function confirmarEdicaoServico(){
+  const id=document.getElementById('edit-serv-id').value;
+  const idx=DB.servicos.findIndex(s=>s.id===id); if(idx<0) return;
+  DB.servicos[idx]={...DB.servicos[idx],
+    tipo:document.getElementById('edit-tipo').value,
+    armeiro:document.getElementById('edit-armeiro').value,
+    dataRec:document.getElementById('edit-data-rec').value,
+    dataDev:document.getElementById('edit-data-dev').value,
+    status:document.getElementById('edit-status').value,
+    motivo:document.getElementById('edit-motivo').value,
+    matricula:document.getElementById('edit-matricula').value,
+    policial:document.getElementById('edit-policial').value,
+    depto:document.getElementById('edit-depto').value,
+    lotacao:document.getElementById('edit-lotacao').value,
+    modelo:document.getElementById('edit-modelo').value,
+    serie:document.getElementById('edit-serie').value,
+    descricao:document.getElementById('edit-descricao').value,
+    pecas:document.getElementById('edit-pecas').value,
+  };
+  salvar('servicos');
+  fecharModal('modal-edit-servico');
+  renderServicosTable();
+  renderDashServicos();
+}
+
+function excluirServico(id){
+  if(!confirm('Excluir este registro?')) return;
+  DB.servicos=DB.servicos.filter(s=>s.id!==id);
+  salvar('servicos');
+  renderServicosTable();
+  renderDashServicos();
+}
+
+// ═══════════════════════════════════════════════════════
+//  POLICIAIS
+// ═══════════════════════════════════════════════════════
+function abrirModalPolicial(id=null){
+  editingPolId=id;
+  document.getElementById('modal-pol-title').textContent=id?'Editar Policial':'Novo Policial';
+  populateDeptos();
+  if(!id && DB.lotacoes.length===0){
+    alert('Ainda não há lotações cadastradas. Você pode salvar o policial agora e vincular departamento/lotação depois.');
+  }
+  const campos=['pol-matricula','pol-nome','pol-cargo','pol-depto','pol-lotacao','pol-tel','pol-email','pol-obs'];
+  campos.forEach(c=>{ const el=document.getElementById(c); if(el) el.value=''; });
+  if(id){
+    const r=DB.policiais.find(p=>p.id===id); if(!r) return;
+    document.getElementById('pol-matricula').value=r.matricula||'';
+    document.getElementById('pol-nome').value=r.nome||'';
+    document.getElementById('pol-cargo').value=r.cargo||'';
+    document.getElementById('pol-tel').value=r.tel||'';
+    document.getElementById('pol-email').value=r.email||'';
+    document.getElementById('pol-obs').value=r.obs||'';
+    document.getElementById('pol-depto').value=r.depto||'';
+    updateLotacaoModal('pol-depto','pol-lotacao');
+    setTimeout(()=>{ document.getElementById('pol-lotacao').value=r.lotacao||''; },50);
+  }
+  abrirModal('modal-policial');
+}
+
+function salvarPolicial(){
+  const mat=document.getElementById('pol-matricula').value.trim();
+  const nome=document.getElementById('pol-nome').value.trim();
+  const depto=document.getElementById('pol-depto').value;
+  const lotacao=document.getElementById('pol-lotacao').value;
+  const exigeLotacao=DB.lotacoes.length>0;
+  if(!mat||!nome||(exigeLotacao&&(!depto||!lotacao))){
+    alert('Preencha os campos obrigatórios.');
+    return;
+  }
+  if(!editingPolId && DB.policiais.find(p=>p.matricula===mat)){ alert('Matrícula já cadastrada.'); return; }
+
+  const reg={
+    id: editingPolId || uid(),
+    matricula:mat, nome,
+    cargo:document.getElementById('pol-cargo').value,
+    depto:depto||'Não informado',
+    lotacao:lotacao||'Não informada',
+    tel:document.getElementById('pol-tel').value,
+    email:document.getElementById('pol-email').value,
+    obs:document.getElementById('pol-obs').value,
+  };
+  if(editingPolId){ const idx=DB.policiais.findIndex(p=>p.id===editingPolId); DB.policiais[idx]=reg; }
+  else DB.policiais.push(reg);
+  salvar('policiais');
+  fecharModal('modal-policial');
+  renderPoliciaisTable();
+  populateDeptos();
+}
+
+function renderPoliciaisTable(){
+  const txt=(document.getElementById('filter-pol-text')||{}).value?.toLowerCase()||'';
+  const lot=(document.getElementById('filter-pol-lot')||{}).value||'';
+
+  // Populate lotação filter
+  const selLot=document.getElementById('filter-pol-lot');
+  if(selLot){
+    const cur=selLot.value;
+    const lots=[...new Set(DB.policiais.map(p=>p.lotacao).filter(Boolean))].sort();
+    selLot.innerHTML='<option value="">Todas as Lotações</option>';
+    lots.forEach(l=>{ const o=document.createElement('option'); o.value=o.textContent=l; selLot.appendChild(o); });
+    selLot.value=cur;
+  }
+
+  let arr=DB.policiais.filter(p=>{
+    const q=`${p.matricula} ${p.nome} ${p.cargo} ${p.depto} ${p.lotacao} ${p.tel}`.toLowerCase();
+    return (!txt||q.includes(txt))&&(!lot||p.lotacao===lot);
+  });
+  arr=sortArr(arr,'policiais');
+  const tbody=document.getElementById('tbody-policiais');
+  const paged=getPaged(arr,'pag-pol-tbl');
+  if(!arr.length){ tbody.innerHTML='<tr><td colspan="7" class="text-center" style="padding:20px;color:#999">Nenhum policial encontrado</td></tr>'; }
+  else {
+    tbody.innerHTML=paged.map(r=>`
+      <tr>
+        <td><b>${r.matricula}</b></td><td>${r.nome}</td><td>${r.cargo||'—'}</td>
+        <td style="max-width:110px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.depto||'—'}</td>
+        <td>${r.lotacao||'—'}</td><td>${r.tel||'—'}</td>
+        <td>
+          <button class="btn btn-xs btn-outline" onclick="abrirModalPolicial('${r.id}')">✏️</button>
+          <button class="btn btn-xs btn-danger" onclick="excluirPolicial('${r.id}')">🗑️</button>
+        </td>
+      </tr>`).join('');
+  }
+  renderPaginacao('pag-policiais', arr.length, 'pag-pol-tbl', renderPoliciaisTable);
+}
+
+function excluirPolicial(id){
+  if(!confirm('Excluir este policial?')) return;
+  DB.policiais=DB.policiais.filter(p=>p.id!==id);
+  salvar('policiais');
+  renderPoliciaisTable();
+}
+
+// ═══════════════════════════════════════════════════════
+//  LOTAÇÕES
+// ═══════════════════════════════════════════════════════
+function abrirModalLotacao(id=null){
+  editingLotId=id;
+  document.getElementById('modal-lot-title').textContent=id?'Editar Lotação':'Nova Lotação';
+  ['lot-depto','lot-nome','lot-cidade','lot-resp','lot-tel','lot-end'].forEach(c=>{
+    const el=document.getElementById(c); if(el) el.value='';
+  });
+  if(id){
+    const r=DB.lotacoes.find(l=>l.id===id); if(!r) return;
+    document.getElementById('lot-depto').value=r.depto||'';
+    document.getElementById('lot-nome').value=r.nome||'';
+    document.getElementById('lot-cidade').value=r.cidade||'';
+    document.getElementById('lot-resp').value=r.resp||'';
+    document.getElementById('lot-tel').value=r.tel||'';
+    document.getElementById('lot-end').value=r.end||'';
+  }
+  abrirModal('modal-lotacao');
+}
+
+function salvarLotacao(){
+  const depto=document.getElementById('lot-depto').value.trim();
+  const nome=document.getElementById('lot-nome').value.trim();
+  const cidade=document.getElementById('lot-cidade').value.trim();
+  if(!depto||!nome||!cidade){ alert('Preencha os campos obrigatórios.'); return; }
+  const reg={
+    id: editingLotId||uid(),
+    depto, nome, cidade,
+    resp:document.getElementById('lot-resp').value,
+    tel:document.getElementById('lot-tel').value,
+    end:document.getElementById('lot-end').value,
+  };
+  if(editingLotId){ const idx=DB.lotacoes.findIndex(l=>l.id===editingLotId); DB.lotacoes[idx]=reg; }
+  else DB.lotacoes.push(reg);
+  salvar('lotacoes');
+  fecharModal('modal-lotacao');
+  renderLotacoesTable();
+  populateDeptos();
+}
+
+function renderLotacoesTable(){
+  const txt=(document.getElementById('filter-lot-text')||{}).value?.toLowerCase()||'';
+  let arr=DB.lotacoes.filter(l=>{
+    const q=`${l.depto} ${l.nome} ${l.cidade} ${l.resp}`.toLowerCase();
+    return !txt||q.includes(txt);
+  });
+  arr=sortArr(arr,'lotacoes');
+  const tbody=document.getElementById('tbody-lotacoes');
+  const paged=getPaged(arr,'pag-lot-tbl');
+  if(!arr.length){ tbody.innerHTML='<tr><td colspan="5" class="text-center" style="padding:20px;color:#999">Nenhuma lotação encontrada</td></tr>'; }
+  else {
+    tbody.innerHTML=paged.map(r=>`
+      <tr>
+        <td><b>${r.depto}</b></td><td>${r.nome}</td><td>${r.cidade}</td><td>${r.resp||'—'}</td>
+        <td>
+          <button class="btn btn-xs btn-outline" onclick="abrirModalLotacao('${r.id}')">✏️</button>
+          <button class="btn btn-xs btn-danger" onclick="excluirLotacao('${r.id}')">🗑️</button>
+        </td>
+      </tr>`).join('');
+  }
+  renderPaginacao('pag-lotacoes', arr.length, 'pag-lot-tbl', renderLotacoesTable);
+}
+
+function excluirLotacao(id){
+  if(!confirm('Excluir esta lotação?')) return;
+  DB.lotacoes=DB.lotacoes.filter(l=>l.id!==id);
+  salvar('lotacoes');
+  renderLotacoesTable();
+  populateDeptos();
+}
+
+// ═══════════════════════════════════════════════════════
+//  ITENS
+// ═══════════════════════════════════════════════════════
+function populateFornecedoresSelect(){
+  const sel=document.getElementById('item-fornecedor'); if(!sel) return;
+  const cur=sel.value;
+  sel.innerHTML='<option value="">Selecione...</option>';
+  DB.fornecedores.forEach(f=>{
+    const o=document.createElement('option'); o.value=f.id; o.textContent=f.nome; sel.appendChild(o);
+  });
+  sel.value=cur;
+}
+
+function toggleCamposCategoria(){
+  const cat=document.getElementById('item-categoria').value;
+  const serieDiv=document.getElementById('campo-serie');
+  const validadeDiv=document.getElementById('campo-validade');
+  const semSerie=['uniformes','municoes'];
+  const comValidade=['coletes','municoes'];
+  if(serieDiv) serieDiv.style.display=semSerie.includes(cat)?'none':'flex';
+  if(validadeDiv) validadeDiv.style.display=comValidade.includes(cat)?'flex':'none';
+  if(!comValidade.includes(cat)){
+    const dtVal=document.getElementById('item-dt-val');
+    if(dtVal) dtVal.value='';
+  }
+}
+
+function abrirModalItem(id=null){
+  editingItemId=id;
+  document.getElementById('modal-item-title').textContent=id?'Editar Item':'Novo Item';
+  populateFornecedoresSelect();
+  popularMarcas('item-marca');
+  ['item-patrimonio','item-marca','item-modelo','item-serie','item-obs'].forEach(c=>{
+    const el=document.getElementById(c); if(el) el.value='';
+  });
+  document.getElementById('item-categoria').value='';
+  document.getElementById('item-subcategoria').innerHTML='<option value="">Selecione a categoria</option>';
+  document.getElementById('item-status').value='Disponível';
+  document.getElementById('item-dt-aq').value='';
+  document.getElementById('item-dt-val').value='';
+  toggleCamposCategoria();
+  if(id){
+    const r=DB.itens.find(i=>i.id===id); if(!r) return;
+    const cls=classificarItemInventario(r);
+    document.getElementById('item-patrimonio').value=r.patrimonio||'';
+    document.getElementById('item-categoria').value=cls.categoria||'';
+    popularSubcategoriasSelect('item-subcategoria',cls.categoria,'Selecione...');
+    document.getElementById('item-marca').value=r.marca||'';
+    atualizarModelos('item-marca', 'item-modelo'); // Carrega os modelos da marca antes de setar o valor
+    document.getElementById('item-modelo').value=r.modelo||'';
+    document.getElementById('item-subcategoria').value=r.subcategoria||cls.subcategoria||'';
+    document.getElementById('item-marca').value=r.marca||'';
+    document.getElementById('item-modelo').value=r.modelo||'';
+    document.getElementById('item-serie').value=r.serie||'';
+    document.getElementById('item-fornecedor').value=r.fornecedorId||'';
+    document.getElementById('item-dt-aq').value=r.dtAq||'';
+    document.getElementById('item-dt-val').value=r.dtVal||'';
+    document.getElementById('item-status').value=normalizarStatusItem(r.status)||'Disponível';
+    document.getElementById('item-obs').value=r.obs||'';
+    toggleCamposCategoria();
+  }
+  abrirModal('modal-item');
+}
+
+function salvarItem(){
+  const patrimonio=document.getElementById('item-patrimonio').value.trim();
+  const categoria=document.getElementById('item-categoria').value;
+  const subcategoria=document.getElementById('item-subcategoria').value;
+  if(!categoria || !subcategoria){ alert('Preencha categoria e subcategoria.'); return; }
+  const itemAtual=editingItemId ? DB.itens.find(i=>i.id===editingItemId) : null;
+  const qtdTotal=itemAtual ? (parseInt(itemAtual.qtdTotal,10)||1) : 1;
+  const qtdDisp=itemAtual ? (parseInt(itemAtual.qtdDisp,10)||qtdTotal) : qtdTotal;
+  const qtdMin=itemAtual ? (parseInt(itemAtual.qtdMin,10)||1) : 1;
+  const marca=document.getElementById('item-marca').value.trim();
+  const modelo=document.getElementById('item-modelo').value.trim();
+  const categoriaTxt=String(labelCategoria(categoria)||'Item').replace(/^[^A-Za-zÀ-ÿ0-9]+ ?/,'');
+  const subcategoriaTxt=labelSubcategoria(subcategoria);
+  const det=[marca,modelo].filter(Boolean).join(' / ');
+  const baseDesc=`${categoriaTxt} ${subcategoriaTxt}`.trim();
+  const descricao=det ? `${baseDesc} ${det}` : (patrimonio || baseDesc);
+  const fornId=document.getElementById('item-fornecedor').value;
+  const forn=DB.fornecedores.find(f=>f.id===fornId);
+  const reg={
+    id: editingItemId||uid(),
+    patrimonio,
+    descricao, categoria, subcategoria,
+    marca,
+    modelo,
+    serie:document.getElementById('item-serie').value,
+    qtdTotal, qtdDisp,
+    qtdMin,
+    fornecedorId:fornId,
+    fornecedor:forn?forn.nome:'',
+    dtAq:document.getElementById('item-dt-aq').value,
+    dtVal:document.getElementById('item-dt-val').value,
+    status:normalizarStatusItem(document.getElementById('item-status').value),
+    obs:document.getElementById('item-obs').value,
+  };
+  if(editingItemId){ const idx=DB.itens.findIndex(i=>i.id===editingItemId); DB.itens[idx]=reg; }
+  else {
+    DB.itens.push(reg);
+    // Registra movimento de aquisição
+    registrarMovimento({
+      tipo:'Entrada (Aquisição)', itemId:reg.id, itemDesc:reg.descricao,
+      categoria:reg.categoria, subcategoria:reg.subcategoria, qtd:reg.qtdTotal, serie:reg.serie||reg.patrimonio,
+      policial:'—', matricula:'—', lotacao:'—', numCautela:'—',
+      obs:'Cadastro inicial de item'
+    });
+  }
+  salvar('itens');
+  fecharModal('modal-item');
+  renderItensTable();
+  renderDashEstoque();
+}
+
+function renderItensTable(){
+  const txt=(document.getElementById('filter-item-text')||{}).value?.toLowerCase()||'';
+  const cat=(document.getElementById('filter-item-cat')||{}).value||'';
+  const st=(document.getElementById('filter-item-status')||{}).value||'';
+
+  // Populate category filter
+  const selCat=document.getElementById('filter-item-cat');
+  if(selCat && opcoesMenu('item_categoria').length===0){
+    const cur=selCat.value;
+    const cats=[...new Set(DB.itens.map(i=>classificarItemInventario(i).categoria).filter(Boolean))].sort();
+    selCat.innerHTML='<option value="">Todas as Categorias</option>';
+    cats.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=labelCategoria(c); selCat.appendChild(o); });
+    selCat.value=cur;
+  }
+
+  let arr=DB.itens.filter(i=>{
+    const q=`${i.patrimonio} ${i.descricao} ${i.categoria} ${i.subcategoria||''} ${i.marca} ${i.modelo||''} ${i.serie} ${i.status} ${i.fornecedor} ${i.dtVal||''}`.toLowerCase();
+    const cls=classificarItemInventario(i);
+    return (!txt||q.includes(txt))&&(!cat||cls.categoria===cat)&&(!st||normalizarStatusItem(i.status)===st);
+  });
+  arr=sortArr(arr,'itens');
+  const tbody=document.getElementById('tbody-itens');
+  const paged=getPaged(arr,'pag-itens-tbl');
+  if(!arr.length){ tbody.innerHTML='<tr><td colspan="12" class="text-center" style="padding:20px;color:#999">Nenhum item encontrado</td></tr>'; }
+  else {
+    tbody.innerHTML=paged.map(r=>{
+      const critico=r.qtdDisp<=r.qtdMin?'style="color:#c62828;font-weight:700"':'';
+      return `<tr>
+        <td>${r.patrimonio||'—'}</td>
+        <td><b>${r.descricao}</b></td>
+        <td><span style="font-size:.78rem;padding:2px 8px;border-radius:20px;background:#e8eaf6;color:#1a237e">${labelCategoriaSubcategoria(r.categoria,r.subcategoria)}</span></td>
+        <td>${[r.marca,r.modelo].filter(Boolean).join(' / ')||'—'}</td>
+        <td>${r.serie||'—'}</td>
+        <td>${r.qtdTotal}</td>
+        <td ${critico}>${r.qtdDisp}</td>
+        <td>${r.qtdMin}</td>
+        <td>${badgeValidade(r.dtVal)}</td>
+        <td style="max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.fornecedor||'—'}</td>
+        <td>${badgeStatus(normalizarStatusItem(r.status))}</td>
+        <td>
+          <button class="btn btn-xs btn-outline" onclick="abrirModalItem('${r.id}')">✏️</button>
+          <button class="btn btn-xs btn-danger" onclick="excluirItem('${r.id}')">🗑️</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+  renderPaginacao('pag-itens', arr.length, 'pag-itens-tbl', renderItensTable);
+}
+
+function excluirItem(id){
+  if(!confirm('Excluir este item? Esta ação não pode ser desfeita.')) return;
+  DB.itens=DB.itens.filter(i=>i.id!==id);
+  salvar('itens');
+  renderItensTable();
+  renderDashEstoque();
+}
+
+// ═══════════════════════════════════════════════════════
+//  FORNECEDORES
+// ═══════════════════════════════════════════════════════
+function abrirModalFornecedor(id=null){
+  editingFornId=id;
+  document.getElementById('modal-forn-title').textContent=id?'Editar Fornecedor':'Novo Fornecedor';
+  ['forn-nome','forn-cnpj','forn-contato','forn-tel','forn-email','forn-end','forn-obs'].forEach(c=>{
+    const el=document.getElementById(c); if(el) el.value='';
+  });
+  document.getElementById('forn-categoria').value='';
+  if(id){
+    const r=DB.fornecedores.find(f=>f.id===id); if(!r) return;
+    document.getElementById('forn-nome').value=r.nome||'';
+    document.getElementById('forn-cnpj').value=r.cnpj||'';
+    document.getElementById('forn-contato').value=r.contato||'';
+    document.getElementById('forn-tel').value=r.tel||'';
+    document.getElementById('forn-email').value=r.email||'';
+    document.getElementById('forn-categoria').value=r.categoria||'';
+    document.getElementById('forn-end').value=r.end||'';
+    document.getElementById('forn-obs').value=r.obs||'';
+  }
+  abrirModal('modal-fornecedor');
+}
+
+function salvarFornecedor(){
+  const nome=document.getElementById('forn-nome').value.trim();
+  if(!nome){ alert('Informe a razão social ou nome.'); return; }
+  const reg={
+    id: editingFornId||uid(),
+    nome,
+    cnpj:document.getElementById('forn-cnpj').value,
+    contato:document.getElementById('forn-contato').value,
+    tel:document.getElementById('forn-tel').value,
+    email:document.getElementById('forn-email').value,
+    categoria:document.getElementById('forn-categoria').value,
+    end:document.getElementById('forn-end').value,
+    obs:document.getElementById('forn-obs').value,
+  };
+  if(editingFornId){ const idx=DB.fornecedores.findIndex(f=>f.id===editingFornId); DB.fornecedores[idx]=reg; }
+  else DB.fornecedores.push(reg);
+  salvar('fornecedores');
+  fecharModal('modal-fornecedor');
+  renderFornecedoresTable();
+}
+
+function renderFornecedoresTable(){
+  const txt=(document.getElementById('filter-forn-text')||{}).value?.toLowerCase()||'';
+  let arr=DB.fornecedores.filter(f=>{
+    const q=`${f.nome} ${f.cnpj} ${f.contato} ${f.tel} ${f.email} ${f.categoria}`.toLowerCase();
+    return !txt||q.includes(txt);
+  });
+  arr=sortArr(arr,'fornecedores');
+  const tbody=document.getElementById('tbody-fornecedores');
+  const paged=getPaged(arr,'pag-forn-tbl');
+  if(!arr.length){ tbody.innerHTML='<tr><td colspan="7" class="text-center" style="padding:20px;color:#999">Nenhum fornecedor encontrado</td></tr>'; }
+  else {
+    tbody.innerHTML=paged.map(r=>`
+      <tr>
+        <td><b>${r.nome}</b></td><td>${r.cnpj||'—'}</td><td>${r.contato||'—'}</td>
+        <td>${r.tel||'—'}</td><td>${r.email||'—'}</td><td>${r.categoria||'—'}</td>
+        <td>
+          <button class="btn btn-xs btn-outline" onclick="abrirModalFornecedor('${r.id}')">✏️</button>
+          <button class="btn btn-xs btn-danger" onclick="excluirFornecedor('${r.id}')">🗑️</button>
+        </td>
+      </tr>`).join('');
+  }
+  renderPaginacao('pag-fornecedores', arr.length, 'pag-forn-tbl', renderFornecedoresTable);
+}
+
+function excluirFornecedor(id){
+  if(!confirm('Excluir este fornecedor?')) return;
+  DB.fornecedores=DB.fornecedores.filter(f=>f.id!==id);
+  salvar('fornecedores');
+  renderFornecedoresTable();
+}
+
+// ═══════════════════════════════════════════════════════
+//  CAUTELAS
+// ═══════════════════════════════════════════════════════
+function gerarNumeroCautela(){
+  return nextNumeroCautela();
+}
+
+function abrirModalCautela(){
+  populateDeptos();
+  // Populate category filter no select de cautela
+  const campos=['caut-matricula','caut-policial','caut-obs'];
+  campos.forEach(c=>{ const el=document.getElementById(c); if(el) el.value=''; });
+  document.getElementById('caut-depto').value='';
+  document.getElementById('caut-lotacao').innerHTML='<option value="">Selecione o departamento</option>';
+  document.getElementById('caut-cat').value='';
+  document.getElementById('caut-subcategoria').innerHTML='<option value="">Todas da categoria</option>';
+  document.getElementById('caut-item').innerHTML='<option value="">Selecione a categoria primeiro</option>';
+  document.getElementById('caut-serie').value='';
+  document.getElementById('caut-disp').value='';
+  document.getElementById('caut-qtd').value=1;
+  document.getElementById('caut-data-saida').value=hoje();
+  document.getElementById('caut-data-prev').value='';
+  document.getElementById('caut-numero').value=gerarNumeroCautela();
+  document.getElementById('alert-caut-err').style.display='none';
+  document.getElementById('alert-caut-estoque').style.display='none';
+  editingCautId=null;
+  document.getElementById('modal-caut-title').textContent='Nova Cautela';
+  abrirModal('modal-cautela');
+}
+
+function salvarCautela(){
+  const numero=document.getElementById('caut-numero').value;
+  const dataSaida=document.getElementById('caut-data-saida').value;
+  const matricula=document.getElementById('caut-matricula').value.trim();
+  const policial=document.getElementById('caut-policial').value.trim();
+  const depto=document.getElementById('caut-depto').value;
+  const lotacao=document.getElementById('caut-lotacao').value;
+  const itemId=document.getElementById('caut-item').value;
+  const serieInformada=document.getElementById('caut-serie').value.trim();
+  const qtd=parseInt(document.getElementById('caut-qtd').value)||0;
+  const errEl=document.getElementById('alert-caut-err');
+  const estEl=document.getElementById('alert-caut-estoque');
+
+  if(!dataSaida||!matricula||!policial||!depto||!lotacao||!itemId||!qtd){
+    errEl.style.display='block'; setTimeout(()=>errEl.style.display='none',3000); return;
+  }
+
+  const item=DB.itens.find(i=>i.id===itemId);
+  if(!item){ alert('Item não encontrado.'); return; }
+  const cls=classificarItemInventario(item);
+  if(qtd>item.qtdDisp){
+    estEl.style.display='block'; setTimeout(()=>estEl.style.display='none',3000); return;
+  }
+
+  // Atualiza estoque
+  const idxItem=DB.itens.findIndex(i=>i.id===itemId);
+  DB.itens[idxItem].qtdDisp -= qtd;
+  if(DB.itens[idxItem].qtdDisp===0) DB.itens[idxItem].status='Em Uso';
+  salvar('itens');
+
+  const reg={
+    id: uid(),
+    numero, dataSaida,
+    dataPrev:document.getElementById('caut-data-prev').value,
+    dataDev:'',
+    matricula, policial, depto, lotacao,
+    itemId, itemDesc:item.descricao, categoria:cls.categoria, subcategoria:cls.subcategoria,
+    serie:serieInformada || (itemSemSerie(item) ? 'Não se aplica' : (item.serie||item.patrimonio||'—')),
+    qtd,
+    obs:document.getElementById('caut-obs').value,
+    status:'Ativa',
+    criadoEm:new Date().toISOString()
+  };
+  DB.cautelas.push(reg);
+  salvar('cautelas');
+
+  // Registra movimento
+  registrarMovimento({
+    tipo:'Saída (Cautela)', itemId, itemDesc:item.descricao, categoria:cls.categoria, subcategoria:cls.subcategoria,
+    qtd, serie:reg.serie, policial, matricula, lotacao, numCautela:numero,
+    obs:reg.obs, data:dataSaida
+  });
+
+  fecharModal('modal-cautela');
+  renderCautelasTable('abertas');
+  renderDashEstoque();
+
+  // Abre PDF automaticamente
+  setTimeout(()=>gerarCautelaDoc(reg.id),300);
+}
+
+function renderCautelasTable(tipo){
+  const isAberta=tipo==='abertas';
+  const txt=(document.getElementById(isAberta?'filter-caut-text':'filter-hist-text')||{}).value?.toLowerCase()||'';
+  const cat=(document.getElementById('filter-caut-cat')||{}).value||'';
+  const lot=(document.getElementById('filter-caut-lot')||{}).value||'';
+  const de=(document.getElementById('filter-hist-de')||{}).value||'';
+  const ate=(document.getElementById('filter-hist-ate')||{}).value||'';
+
+  // Populate selects de categoria e lotação na aba abertas
+  if(isAberta){
+    const selCat=document.getElementById('filter-caut-cat');
+    if(selCat && opcoesMenu('item_categoria').length===0){
+      const cur=selCat.value;
+      const cats=[...new Set(DB.cautelas.map(c=>classificarItemInventario(c).categoria).filter(Boolean))];
+      selCat.innerHTML='<option value="">Todas as categorias</option>';
+      cats.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=labelCategoria(c); selCat.appendChild(o); });
+      selCat.value=cur;
+    }
+    const selLot=document.getElementById('filter-caut-lot');
+    if(selLot){
+      const cur=selLot.value;
+      const lots=[...new Set(DB.cautelas.map(c=>c.lotacao).filter(Boolean))].sort();
+      selLot.innerHTML='<option value="">Todas as lotações</option>';
+      lots.forEach(l=>{ const o=document.createElement('option'); o.value=o.textContent=l; selLot.appendChild(o); });
+      selLot.value=cur;
+    }
+  }
+
+  let arr=DB.cautelas.filter(c=>{
+    const q=`${c.numero} ${c.policial} ${c.matricula} ${c.lotacao} ${c.depto} ${c.itemDesc} ${c.serie}`.toLowerCase();
+    const matchTxt=!txt||q.includes(txt);
+    const cls=classificarItemInventario(c);
+    const matchCat=!cat||cls.categoria===cat;
+    const matchLot=!lot||c.lotacao===lot;
+    const matchStatus=isAberta ? c.status==='Ativa' : true;
+    const matchDe=!de||c.dataSaida>=de;
+    const matchAte=!ate||c.dataSaida<=ate;
+    return matchTxt&&matchCat&&matchLot&&matchStatus&&matchDe&&matchAte;
+  }).sort((a,b)=>b.criadoEm.localeCompare(a.criadoEm));
+
+  const tbodyId=isAberta?'tbody-cautelas-abertas':'tbody-cautelas-historico';
+  const pagKey=isAberta?'pag-caut-ab':'pag-caut-hi';
+  const pagId=isAberta?'pag-cautelas-abertas':'pag-cautelas-historico';
+  const tbody=document.getElementById(tbodyId);
+  const paged=getPaged(arr,pagKey);
+
+  if(!arr.length){
+    tbody.innerHTML=`<tr><td colspan="${isAberta?12:10}" class="text-center" style="padding:20px;color:#999">Nenhuma cautela encontrada</td></tr>`;
+  } else if(isAberta){
+    tbody.innerHTML=paged.map(r=>`
+      <tr>
+        <td><b>${r.numero}</b></td>
+        <td>${fmtData(r.dataSaida)}</td>
+        <td>${r.policial}</td>
+        <td>${r.matricula}</td>
+        <td style="max-width:110px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.lotacao}</td>
+        <td><b>${r.itemDesc}</b></td>
+        <td><span style="font-size:.75rem;padding:2px 8px;border-radius:20px;background:#e8eaf6;color:#1a237e">${labelCategoriaSubcategoria(r.categoria,r.subcategoria)}</span></td>
+        <td>${r.qtd}</td>
+        <td>${r.serie}</td>
+        <td>${r.dataPrev?fmtData(r.dataPrev):'—'}</td>
+        <td>${badgeStatus(r.status)}</td>
+        <td>
+          <button class="btn btn-xs btn-info" onclick="gerarCautelaDoc('${r.id}')" title="Gerar PDF">🖨️</button>
+          <button class="btn btn-xs btn-warning" onclick="abrirDevolucao('${r.id}')" title="Registrar devolução">↩️</button>
+          <button class="btn btn-xs btn-outline" onclick="abrirEditCautela('${r.id}')" title="Editar">✏️</button>
+          <button class="btn btn-xs btn-danger" onclick="excluirCautela('${r.id}')" title="Excluir">🗑️</button>
+        </td>
+      </tr>`).join('');
+  } else {
+    tbody.innerHTML=paged.map(r=>`
+      <tr>
+        <td><b>${r.numero}</b></td>
+        <td>${fmtData(r.dataSaida)}</td>
+        <td>${r.dataDev?fmtData(r.dataDev):'—'}</td>
+        <td>${r.policial}</td>
+        <td>${r.matricula}</td>
+        <td style="max-width:110px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.lotacao}</td>
+        <td><b>${r.itemDesc}</b></td>
+        <td>${r.qtd}</td>
+        <td>${badgeStatus(r.status)}</td>
+        <td>
+          <button class="btn btn-xs btn-info" onclick="gerarCautelaDoc('${r.id}')">🖨️</button>
+          <button class="btn btn-xs btn-danger" onclick="excluirCautela('${r.id}')">🗑️</button>
+        </td>
+      </tr>`).join('');
+  }
+  renderPaginacao(pagId, arr.length, pagKey, ()=>renderCautelasTable(tipo));
+}
+
+function abrirEditCautela(id){
+  const r=DB.cautelas.find(c=>c.id===id); if(!r) return;
+  editingCautId=id;
+  document.getElementById('edit-caut-prev').value=r.dataPrev||'';
+  document.getElementById('edit-caut-status').value=r.status||'Ativa';
+  document.getElementById('edit-caut-obs').value=r.obs||'';
+  document.getElementById('edit-caut-id').value=id;
+  abrirModal('modal-edit-cautela');
+}
+
+function confirmarEdicaoCautela(){
+  const id=document.getElementById('edit-caut-id').value;
+  const idx=DB.cautelas.findIndex(c=>c.id===id); if(idx<0) return;
+  DB.cautelas[idx].dataPrev=document.getElementById('edit-caut-prev').value;
+  DB.cautelas[idx].status=document.getElementById('edit-caut-status').value;
+  DB.cautelas[idx].obs=document.getElementById('edit-caut-obs').value;
+  salvar('cautelas');
+  fecharModal('modal-edit-cautela');
+  renderCautelasTable('abertas');
+  renderCautelasTable('historico');
+}
+
+function excluirCautela(id){
+  const caut=DB.cautelas.find(c=>c.id===id);
+  if(!caut) return;
+  if(!confirm('Excluir esta cautela? Se estiver ativa, o estoque será devolvido automaticamente.')) return;
+
+  if(caut.status==='Ativa'){
+    const idxItem=DB.itens.findIndex(i=>i.id===caut.itemId);
+    if(idxItem>=0){
+      DB.itens[idxItem].qtdDisp+=caut.qtd;
+      if(DB.itens[idxItem].status==='Em Uso' || DB.itens[idxItem].status==='Em Cautela') DB.itens[idxItem].status='Disponível';
+      salvar('itens');
+    }
+  }
+
+  DB.cautelas=DB.cautelas.filter(c=>c.id!==id);
+  salvar('cautelas');
+  renderCautelasTable('abertas');
+  renderCautelasTable('historico');
+  renderItensTable();
+  renderDashEstoque();
+}
+
+// ═══════════════════════════════════════════════════════
+//  DEVOLUÇÃO
+// ═══════════════════════════════════════════════════════
+function abrirDevolucao(id){
+  devCautId=id;
+  const r=DB.cautelas.find(c=>c.id===id); if(!r) return;
+  document.getElementById('dev-info').innerHTML=`
+    <b>Cautela:</b> ${r.numero}<br>
+    <b>Policial:</b> ${r.policial} — ${r.matricula}<br>
+    <b>Lotação:</b> ${r.lotacao}<br>
+    <b>Item:</b> ${r.itemDesc} (${labelCategoriaSubcategoria(r.categoria,r.subcategoria)})<br>
+    <b>Qtd.:</b> ${r.qtd} &nbsp;|&nbsp; <b>Saída:</b> ${fmtData(r.dataSaida)}
+  `;
+  document.getElementById('dev-data').value=hoje();
+  document.getElementById('dev-condicao').value='Bom estado';
+  document.getElementById('dev-retorna-estoque').value='sim';
+  document.getElementById('dev-obs').value='';
+  abrirModal('modal-devolucao');
+}
+
+function confirmarDevolucao(){
+  if(!devCautId) return;
+  const dataDev=document.getElementById('dev-data').value;
+  if(!dataDev){ alert('Informe a data de devolução.'); return; }
+  const retornaEstoque=document.getElementById('dev-retorna-estoque').value==='sim';
+  const idx=DB.cautelas.findIndex(c=>c.id===devCautId); if(idx<0) return;
+  const caut=DB.cautelas[idx];
+
+  // Atualiza cautela
+  DB.cautelas[idx].dataDev=dataDev;
+  DB.cautelas[idx].status='Devolvido';
+  DB.cautelas[idx].condicaoDev=document.getElementById('dev-condicao').value;
+  DB.cautelas[idx].obsDev=document.getElementById('dev-obs').value;
+  salvar('cautelas');
+
+  // Retorna ao estoque (quando marcado)
+  const idxItem=DB.itens.findIndex(i=>i.id===caut.itemId);
+  if(idxItem>=0 && retornaEstoque){
+    const qtdAtual=parseInt(DB.itens[idxItem].qtdDisp,10)||0;
+    DB.itens[idxItem].qtdDisp=qtdAtual + (parseInt(caut.qtd,10)||0);
+    if(DB.itens[idxItem].status==='Em Uso' || DB.itens[idxItem].status==='Em Cautela'){
+      DB.itens[idxItem].status='Disponível';
+    }
+    salvar('itens');
+  }
+
+  // Registra movimento
+  registrarMovimento({
+    tipo:'Entrada (Devolução)', itemId:caut.itemId, itemDesc:caut.itemDesc,
+    categoria:caut.categoria, subcategoria:caut.subcategoria, qtd:caut.qtd, serie:caut.serie,
+    policial:caut.policial, matricula:caut.matricula, lotacao:caut.lotacao,
+    numCautela:caut.numero,
+    obs:`${document.getElementById('dev-obs').value||''}${retornaEstoque?'':' [Item não retornou ao estoque]'}`.trim(),
+    data:dataDev
+  });
+
+  fecharModal('modal-devolucao');
+  renderCautelasTable('abertas');
+  renderCautelasTable('historico');
+  renderDashEstoque();
+  renderItensTable();
+}
+
+// ═══════════════════════════════════════════════════════
+//  MOVIMENTOS
+// ═══════════════════════════════════════════════════════
+function registrarMovimento(m){
+  DB.movimentos.push({
+    id:uid(),
+    data: m.data||hoje(),
+    tipo:m.tipo, itemId:m.itemId, itemDesc:m.itemDesc,
+    categoria:m.categoria, subcategoria:m.subcategoria||'', qtd:m.qtd, serie:m.serie||'—',
+    policial:m.policial||'—', matricula:m.matricula||'—',
+    lotacao:m.lotacao||'—', numCautela:m.numCautela||'—',
+    obs:m.obs||'', criadoEm:new Date().toISOString()
+  });
+  salvar('movimentos');
+}
+
+// ═══════════════════════════════════════════════════════
+//  DASHBOARD ESTOQUE
+// ═══════════════════════════════════════════════════════
+function renderDashEstoque(){
+  const selCat=document.getElementById('filter-dash-categoria');
+  const categoriaSelecionada=selCat ? selCat.value : '';
+  if(selCat){
+    const cur=selCat.value;
+    selCat.innerHTML='<option value="">Todas as Categorias</option>';
+    const menuCats=opcoesMenu('item_categoria');
+    if(menuCats.length){
+      menuCats.forEach(c=>{
+        const o=document.createElement('option');
+        o.value=c.valor;
+        o.textContent=c.rotulo;
+        selCat.appendChild(o);
+      });
+    }else{
+      const cats=[...new Set(DB.itens.map(i=>i.categoria).filter(Boolean))].sort();
+      cats.forEach(c=>{
+        const o=document.createElement('option');
+        o.value=c;
+        o.textContent=labelCategoria(c);
+        selCat.appendChild(o);
+      });
+    }
+    if(cur && [...selCat.options].some(o=>o.value===cur)) selCat.value=cur;
+  }
+
+  const itensFiltrados=!categoriaSelecionada
+    ? DB.itens
+    : DB.itens.filter(i=>String(classificarItemInventario(i).categoria)===String(categoriaSelecionada));
+  const cautelasFiltradas=!categoriaSelecionada
+    ? DB.cautelas
+    : DB.cautelas.filter(c=>String(classificarItemInventario(c).categoria)===String(categoriaSelecionada));
+
+  // Stats cards
+  const totalItens=itensFiltrados.reduce((s,i)=>s+i.qtdTotal,0);
+  const dispItens=itensFiltrados.reduce((s,i)=>s+i.qtdDisp,0);
+  const emCautela=cautelasFiltradas.filter(c=>c.status==='Ativa').length;
+  const criticos=itensFiltrados.filter(i=>i.qtdDisp<=i.qtdMin).length;
+  const totalCautelas=cautelasFiltradas.length;
+  const devolvidas=cautelasFiltradas.filter(c=>c.status==='Devolvido').length;
+  const vencidos=itensFiltrados.filter(i=>i.dtVal && diasParaData(i.dtVal)<0).length;
+
+  document.getElementById('stats-estoque-grid').innerHTML=`
+    <div class="stat-card blue"><div class="stat-val">${totalItens}</div><div class="stat-label">📦 Total de Itens (qtd.)</div></div>
+    <div class="stat-card green"><div class="stat-val">${dispItens}</div><div class="stat-label">✅ Disponíveis</div></div>
+    <div class="stat-card orange"><div class="stat-val">${emCautela}</div><div class="stat-label">📜 Cautelas Ativas</div></div>
+    <div class="stat-card red"><div class="stat-val">${criticos}</div><div class="stat-label">⚠️ Estoque Crítico</div></div>
+    <div class="stat-card purple"><div class="stat-val">${totalCautelas}</div><div class="stat-label">📋 Total Cautelas</div></div>
+    <div class="stat-card teal"><div class="stat-val">${devolvidas}</div><div class="stat-label">↩️ Devolvidos</div></div>
+    <div class="stat-card red"><div class="stat-val">${vencidos}</div><div class="stat-label">📅 Itens Vencidos</div></div>
+  `;
+
+  // Chart categorias
+  const byCat={};
+  itensFiltrados.forEach(i=>{ byCat[labelCategoria(i.categoria)]=(byCat[labelCategoria(i.categoria)]||0)+i.qtdDisp; });
+  renderChartBars('chart-cat-estoque', Object.entries(byCat).map(([k,v])=>({label:k,val:v})));
+
+  // Chart lotações (itens em cautela ativa por lotação)
+  const byLot={};
+  cautelasFiltradas.filter(c=>c.status==='Ativa').forEach(c=>{
+    const pol=DB.policiais.find(p=>String(p.matricula||'').trim()===String(c.matricula||'').trim());
+    const lotacaoBase=(pol && pol.lotacao) ? pol.lotacao : c.lotacao;
+    const lotacao=(lotacaoBase && String(lotacaoBase).trim()) ? lotacaoBase : 'Não informada';
+    byLot[lotacao]=(byLot[lotacao]||0)+(parseInt(c.qtd,10)||0);
+  });
+  renderChartBars('chart-lot-estoque', Object.entries(byLot).map(([k,v])=>({label:k,val:v})));
+
+  // Linha do tempo anual de vencimentos
+  const anoAtual=new Date().getFullYear();
+  const hojeData=new Date(hoje()+'T00:00:00');
+  const meses=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const timeline=meses.map((m,idx)=>({ mes:m, idx, vencidos:0, avencer:0, total:0 }));
+  itensFiltrados.forEach(i=>{
+    if(!i.dtVal) return;
+    const dt=new Date(i.dtVal+'T00:00:00');
+    if(dt.getFullYear()!==anoAtual) return;
+    const mes=timeline[dt.getMonth()];
+    if(!mes) return;
+    if(dt<hojeData) mes.vencidos+=1;
+    else mes.avencer+=1;
+    mes.total+=1;
+  });
+  const timelineComDados=timeline.filter(t=>t.total>0);
+  const contTimeline=document.getElementById('chart-vencimento-anual');
+  if(contTimeline){
+    if(!timelineComDados.length){
+      contTimeline.innerHTML=`<p style="color:#999;font-size:.82rem;text-align:center;padding:20px">Sem vencimentos em ${anoAtual} para o filtro atual</p>`;
+    }else{
+      const maxT=Math.max(...timelineComDados.map(t=>t.total),1);
+      contTimeline.innerHTML=timelineComDados.map(t=>`
+        <div style="margin-bottom:8px">
+          <div class="chart-bar-item" style="margin-bottom:4px">
+            <span class="chart-bar-label">${t.mes}/${anoAtual}</span>
+            <div class="chart-bar-track"><div class="chart-bar-fill" style="width:${Math.round(t.total/maxT*100)}%;background:linear-gradient(90deg,#e53935 0%,#fb8c00 50%,#43a047 100%)"></div></div>
+            <span class="chart-bar-val">${t.total}</span>
+          </div>
+          <div style="font-size:.76rem;color:var(--text-light);padding-left:150px">Vencidos: <b style="color:#c62828">${t.vencidos}</b> · A vencer: <b style="color:#2e7d32">${t.avencer}</b></div>
+        </div>`).join('');
+    }
+  }
+
+  // Legend status dos itens
+  const statusItens=['Disponível','Em Uso','Em Reparo','Inservível','Extraviado','Furtado'];
+  const cores={'Disponível':'#43a047','Em Uso':'#fb8c00','Em Reparo':'#1e88e5','Inservível':'#757575','Extraviado':'#e53935','Furtado':'#b71c1c'};
+  document.getElementById('legend-cautelas').innerHTML=statusItens.map(s=>{
+    const n=itensFiltrados.filter(i=>normalizarStatusItem(i.status)===s).length;
+    return `<li><span class="legend-dot" style="background:${cores[s]}"></span><b>${s}</b><span style="margin-left:auto;font-weight:700">${n}</span></li>`;
+  }).join('');
+
+  // Estoque crítico
+  const criticoArr=itensFiltrados.filter(i=>i.qtdDisp<=i.qtdMin);
+  const tbodyCrit=document.getElementById('tbody-estoque-critico');
+  tbodyCrit.innerHTML=!criticoArr.length
+    ? '<tr><td colspan="4" class="text-center" style="padding:16px;color:#999">✅ Nenhum item crítico</td></tr>'
+    : criticoArr.map(i=>`
+        <tr>
+          <td><b>${i.descricao}</b></td>
+          <td>${labelCategoriaSubcategoria(i.categoria,i.subcategoria)}</td>
+          <td style="color:#c62828;font-weight:700">${i.qtdDisp}</td>
+          <td>${i.qtdMin}</td>
+        </tr>`).join('');
+
+  // Distribuição por unidade
+  const unidades={};
+  cautelasFiltradas.filter(c=>c.status==='Ativa').forEach(c=>{
+    if(!unidades[c.lotacao]) unidades[c.lotacao]={qtd:0,policiais:new Set(),ultima:''};
+    unidades[c.lotacao].qtd+=c.qtd;
+    unidades[c.lotacao].policiais.add(c.policial);
+    if(c.dataSaida>unidades[c.lotacao].ultima) unidades[c.lotacao].ultima=c.dataSaida;
+  });
+  const tbodyDist=document.getElementById('tbody-dist-unidade');
+  const unArr=Object.entries(unidades);
+  tbodyDist.innerHTML=!unArr.length
+    ? '<tr><td colspan="4" class="text-center" style="padding:16px;color:#999">Nenhum item distribuído</td></tr>'
+    : unArr.sort((a,b)=>b[1].qtd-a[1].qtd).map(([lot,d])=>`
+        <tr>
+          <td><b>${lot}</b></td>
+          <td>${d.qtd}</td>
+          <td>${d.policiais.size}</td>
+          <td>${fmtData(d.ultima)}</td>
+        </tr>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+//  RELATÓRIOS
+// ═══════════════════════════════════════════════════════
+function populateRelFiltros(){
+  const selCat=document.getElementById('rel-cat');
+  if(selCat && opcoesMenu('item_categoria').length===0){
+    const cats=[...new Set(DB.movimentos.map(m=>classificarItemInventario(m).categoria).filter(Boolean))];
+    selCat.innerHTML='<option value="">Todas</option>';
+    cats.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=labelCategoria(c); selCat.appendChild(o); });
+  }
+  const lots=[...new Set(DB.movimentos.map(m=>m.lotacao).filter(Boolean))].sort();
+  const selLot=document.getElementById('rel-lotacao');
+  if(selLot){
+    selLot.innerHTML='<option value="">Todas</option>';
+    lots.forEach(l=>{ const o=document.createElement('option'); o.value=o.textContent=l; selLot.appendChild(o); });
+  }
+}
+
+function gerarRelatorio(){
+  const de=document.getElementById('rel-de').value;
+  const ate=document.getElementById('rel-ate').value;
+  const cat=document.getElementById('rel-cat').value;
+  const tipoMov=document.getElementById('rel-tipo-mov').value;
+  const policial=document.getElementById('rel-policial').value.toLowerCase();
+  const lotacao=document.getElementById('rel-lotacao').value;
+
+  relatorioFiltrado=DB.movimentos.filter(m=>{
+    const cls=classificarItemInventario(m);
+    return (!de||m.data>=de)
+      &&(!ate||m.data<=ate)
+      &&(!cat||cls.categoria===cat)
+      &&(!tipoMov||m.tipo===tipoMov)
+      &&(!policial||(m.policial.toLowerCase().includes(policial)||m.matricula.includes(policial)))
+      &&(!lotacao||m.lotacao===lotacao);
+  }).sort((a,b)=>b.data.localeCompare(a.data));
+
+  document.getElementById('rel-count').textContent=relatorioFiltrado.length;
+  document.getElementById('card-relatorio').style.display='block';
+
+  const tbody=document.getElementById('tbody-relatorio');
+  const paged=getPaged(relatorioFiltrado,'pag-rel-tbl');
+  if(!relatorioFiltrado.length){
+    tbody.innerHTML='<tr><td colspan="11" class="text-center" style="padding:20px;color:#999">Nenhuma movimentação encontrada</td></tr>';
+  } else {
+    tbody.innerHTML=paged.map(m=>`
+      <tr>
+        <td>${fmtData(m.data)}</td>
+        <td><span class="badge ${m.tipo.includes('Saída')?'badge-orange':'badge-green'}">${m.tipo}</span></td>
+        <td><b>${m.itemDesc}</b></td>
+        <td>${labelCategoriaSubcategoria(m.categoria,m.subcategoria)}</td>
+        <td>${m.qtd}</td>
+        <td>${m.serie}</td>
+        <td>${m.policial}</td>
+        <td>${m.matricula}</td>
+        <td style="max-width:110px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.lotacao}</td>
+        <td>${m.numCautela}</td>
+        <td style="max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.obs||'—'}</td>
+      </tr>`).join('');
+  }
+  renderPaginacao('pag-relatorio', relatorioFiltrado.length, 'pag-rel-tbl', gerarRelatorio);
+}
+
+// ═══════════════════════════════════════════════════════
+//  EXPORTAR PDF — CAUTELA
+// ═══════════════════════════════════════════════════════
+function gerarCautelaDoc(id){
+  const r=DB.cautelas.find(c=>c.id===id); if(!r) return;
+  const item=DB.itens.find(i=>i.id===r.itemId)||{};
+  const html=`
+  <div class="cautela-doc" id="print-cautela-${id}">
+    <div class="doc-header">
+      <h1>POLÍCIA CIVIL DO ESTADO DO CEARÁ — PCCE</h1>
+      <h1>DIRETORIA TÉCNICO-OPERACIONAL — DTO</h1>
+      <h2>TERMO DE CAUTELA DE MATERIAL OPERACIONAL</h2>
+      <p style="font-size:.8rem;margin-top:6px">Nº ${r.numero} &nbsp;|&nbsp; Emitido em ${fmtDataHora()}</p>
+    </div>
+
+    <div class="doc-section">
+      <h3>1. Identificação do Policial Recebedor</h3>
+      <table>
+        <tr><td width="30%"><b>Nome Completo</b></td><td>${r.policial}</td><td width="20%"><b>Matrícula</b></td><td>${r.matricula}</td></tr>
+        <tr><td><b>Departamento</b></td><td>${r.depto}</td><td><b>Lotação / Unidade</b></td><td>${r.lotacao}</td></tr>
+      </table>
+    </div>
+
+    <div class="doc-section">
+      <h3>2. Identificação do Material Cautelado</h3>
+      <table>
+        <thead><tr><th>Descrição</th><th>Categoria</th><th>Marca/Modelo</th><th>Nº Série / Patrimônio</th><th>Qtd.</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>${r.itemDesc}</td>
+            <td>${labelCategoriaSubcategoria(r.categoria,r.subcategoria)}</td>
+            <td>${item.marca||'—'}</td>
+            <td>${r.serie}</td>
+            <td>${r.qtd}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="doc-section">
+      <h3>3. Período da Cautela</h3>
+      <table>
+        <tr>
+          <td width="50%"><b>Data de Saída:</b> ${fmtData(r.dataSaida)}</td>
+          <td><b>Previsão de Devolução:</b> ${r.dataPrev?fmtData(r.dataPrev):'Sem prazo definido'}</td>
+        </tr>
+      </table>
+    </div>
+
+    ${r.obs?`<div class="doc-section">
+      <h3>4. Observações / Finalidade</h3>
+      <p style="padding:8px;border:1px dashed #999;background:#f9f9f9">${r.obs}</p>
+    </div>`:''}
+
+    <div class="doc-section">
+      <h3>${r.obs?'5':'4'}. Termos e Responsabilidade</h3>
+      <p style="text-align:justify;font-size:.84rem">
+        O(A) servidor(a) identificado(a) neste termo declara ter recebido o(s) material(is) descrito(s) acima em
+        perfeito estado de conservação e funcionamento, comprometendo-se a utilizá-lo(s) exclusivamente em
+        atividades de serviço, zelar pela sua integridade, bem como devolvê-lo(s) nas condições em que o(s)
+        recebeu ao término do prazo estabelecido ou quando solicitado pelo setor responsável.
+        O não cumprimento das condições deste termo sujeitará o servidor(a) às penalidades previstas em
+        legislação vigente.
+      </p>
+    </div>
+
+    <div class="doc-assinatura">
+      <div class="assin-box">
+        <div class="linha">
+          ${r.policial}<br>
+          Matrícula: ${r.matricula}<br>
+          <b>Recebedor(a)</b>
+        </div>
+      </div>
+      <div class="assin-box">
+        <div class="linha">
+          Responsável pelo Almoxarifado<br>
+          DTO — PCCE<br>
+          <b>Entregador(a)</b>
+        </div>
+      </div>
+      <div class="assin-box">
+        <div class="linha">
+          Chefe da Unidade<br>
+          ${r.lotacao}<br>
+          <b>Autoridade</b>
+        </div>
+      </div>
+    </div>
+
+    <p style="font-size:.72rem;text-align:center;margin-top:24px;color:#666;border-top:1px solid #ddd;padding-top:8px">
+      SALT — Sistema de Controle de Armas e Estoque · DTO · PCCE &nbsp;|&nbsp; Documento gerado em ${fmtDataHora()}
+    </p>
+  </div>`;
+
+  document.getElementById('cautela-doc-content').innerHTML=html;
+  abrirModal('modal-cautela-pdf');
+}
+
+function imprimirCautelaDoc(){
+  const conteudo=document.getElementById('cautela-doc-content').innerHTML;
+  const w=window.open('','_blank','width=900,height=700');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Termo de Cautela</title>
+    <style>
+      body{font-family:'Times New Roman',serif;margin:30px;color:#000;font-size:.9rem;line-height:1.75}
+      .cautela-doc{max-width:750px;margin:0 auto}
+      .doc-header{text-align:center;border-bottom:2px solid #000;padding-bottom:12px;margin-bottom:20px}
+      .doc-header h1{font-size:1rem;text-transform:uppercase;font-weight:700;margin:2px 0}
+      .doc-header h2{font-size:.9rem;font-weight:600;margin-top:6px}
+      .doc-section{margin-bottom:16px}
+      .doc-section h3{font-size:.85rem;font-weight:700;text-transform:uppercase;border-bottom:1px solid #ccc;margin-bottom:8px;padding-bottom:4px}
+      table{width:100%;border-collapse:collapse}
+      td,th{border:1px solid #000;padding:6px 10px;font-size:.83rem}
+      th{background:#f0f0f0;font-weight:700;text-align:center}
+      .doc-assinatura{display:flex;gap:30px;margin-top:50px}
+      .assin-box{flex:1;text-align:center}
+      .assin-box .linha{border-top:1px solid #000;padding-top:6px;margin-top:50px;font-size:.8rem}
+      @media print{body{margin:10mm}}
+    </style>
+  </head><body>${conteudo}</body></html>`);
+  w.document.close();
+  setTimeout(()=>w.print(),500);
+}
+
+// ═══════════════════════════════════════════════════════
+//  EXPORTAR PDF — RELATÓRIO
+// ═══════════════════════════════════════════════════════
+function exportarRelatorioPDF(){
+  if(!relatorioFiltrado.length){ alert('Gere o relatório primeiro.'); return; }
+
+  const de=document.getElementById('rel-de').value;
+  const ate=document.getElementById('rel-ate').value;
+  const linhas=relatorioFiltrado.map(m=>`
+    <tr>
+      <td>${fmtData(m.data)}</td>
+      <td>${m.tipo}</td>
+      <td>${m.itemDesc}</td>
+      <td>${labelCategoriaSubcategoria(m.categoria,m.subcategoria)}</td>
+      <td style="text-align:center">${m.qtd}</td>
+      <td>${m.serie}</td>
+      <td>${m.policial}</td>
+      <td>${m.matricula}</td>
+      <td>${m.lotacao}</td>
+      <td>${m.numCautela}</td>
+    </tr>`).join('');
+
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Relatório de Movimentações</title>
+    <style>
+      body{font-family:Arial,sans-serif;margin:20px;font-size:.78rem;color:#000}
+      h1{font-size:1rem;text-transform:uppercase;text-align:center;margin:0}
+      h2{font-size:.85rem;text-align:center;margin:4px 0 0}
+      .periodo{text-align:center;font-size:.75rem;margin:4px 0 16px;color:#555}
+      table{width:100%;border-collapse:collapse;margin-top:10px}
+      th{background:#1a237e;color:#fff;padding:6px 8px;text-align:left;font-size:.75rem}
+      td{padding:5px 8px;border-bottom:1px solid #ddd;font-size:.73rem}
+      tr:nth-child(even){background:#f5f7ff}
+      .footer{text-align:center;margin-top:20px;font-size:.7rem;color:#888;border-top:1px solid #ccc;padding-top:8px}
+      @media print{body{margin:8mm}button{display:none}}
+    </style>
+  </head><body>
+    <h1>POLÍCIA CIVIL DO ESTADO DO CEARÁ — PCCE</h1>
+    <h2>RELATÓRIO DE MOVIMENTAÇÕES DE ESTOQUE — DTO</h2>
+    <div class="periodo">
+      Período: ${de?fmtData(de):'Início'} a ${ate?fmtData(ate):'Hoje'} &nbsp;|&nbsp;
+      Total de registros: ${relatorioFiltrado.length} &nbsp;|&nbsp;
+      Gerado em: ${fmtDataHora()}
+    </div>
+    <table>
+      <thead><tr>
+        <th>Data</th><th>Tipo Mov.</th><th>Item</th><th>Categoria</th><th>Qtd</th>
+        <th>Nº Série/Pat.</th><th>Policial</th><th>Matrícula</th><th>Lotação</th><th>Nº Cautela</th>
+      </tr></thead>
+      <tbody>${linhas}</tbody>
+    </table>
+    <div class="footer">SALT — Sistema de Controle de Armas e Estoque · DTO · PCCE · ${fmtDataHora()}</div>
+  </body></html>`;
+
+  const w=window.open('','_blank','width=1100,height=750');
+  w.document.write(html);
+  w.document.close();
+  setTimeout(()=>w.print(),500);
+}
+
+// ═══════════════════════════════════════════════════════
+//  EXPORTAR CSV
+// ═══════════════════════════════════════════════════════
+function exportCSV(tipo){
+  let headers=[], rows=[], filename='';
+  if(tipo==='servicos'){
+    headers=['ID','Data Rec.','Data Dev.','Armeiro','Tipo','Status','Motivo','Matrícula','Policial','Depto','Lotação','Modelo','Nº Série','Descrição','Peças'];
+    rows=DB.servicos.map(r=>[r.id,r.dataRec,r.dataDev,r.armeiro,r.tipo,r.status,r.motivo,r.matricula,r.policial,r.depto,r.lotacao,r.modelo,r.serie,r.descricao,r.pecas]);
+    filename='servicos_armas';
+  } else if(tipo==='cautelas'){
+    headers=['Nº Cautela','Data Saída','Data Dev.','Policial','Matrícula','Depto','Lotação','Item','Categoria','Qtd','Nº Série','Status','Obs.'];
+    rows=DB.cautelas.map(r=>[r.numero,r.dataSaida,r.dataDev,r.policial,r.matricula,r.depto,r.lotacao,r.itemDesc,labelCategoriaSubcategoria(r.categoria,r.subcategoria),r.qtd,r.serie,r.status,r.obs]);
+    filename='cautelas';
+  } else if(tipo==='relatorio'){
+    if(!relatorioFiltrado.length){ alert('Gere o relatório primeiro.'); return; }
+    headers=['Data','Tipo Mov.','Item','Categoria','Qtd','Nº Série','Policial','Matrícula','Lotação','Nº Cautela','Obs.'];
+    rows=relatorioFiltrado.map(m=>[m.data,m.tipo,m.itemDesc,labelCategoriaSubcategoria(m.categoria,m.subcategoria),m.qtd,m.serie,m.policial,m.matricula,m.lotacao,m.numCautela,m.obs]);
+    filename='relatorio_movimentacoes';
+  }
+  const esc=v=>'"'+String(v||'').replace(/"/g,'""')+'"';
+  const csv=[headers.map(esc).join(','),...rows.map(r=>r.map(esc).join(','))].join('\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`SALT_${filename}_${hoje()}.csv`;
+  a.click();
+}
+
+// ═══════════════════════════════════════════════════════
+//  INICIALIZAÇÃO
+// ═══════════════════════════════════════════════════════
+(function init(){
+  carregarConfigBackendMenus();
+  capturarDefaultsMenusDoHTML();
+  atualizarMenusInventarioPadrao();
+  popularFiltrosMenus();
+  aplicarMenusNosSelects();
+  sincronizarMenusBackend(true);
+  renderResumoMenus();
+
+  populateDeptos();
+  renderDashServicos();
+
+  // Preenche selects de filtros ao iniciar
+  document.getElementById('filter-item-cat').innerHTML='<option value="">Todas as Categorias</option>';
+  document.getElementById('filter-caut-cat').innerHTML='<option value="">Todas as categorias</option>';
+  document.getElementById('rel-cat').innerHTML='<option value="">Todas</option>';
+  document.getElementById('rel-lotacao').innerHTML='<option value="">Todas</option>';
+
+  // Set data padrão form serviço
+  document.getElementById('ns-data-rec').value=hoje();
+
+  // Fecha modais com ESC
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){
+      document.querySelectorAll('.modal-overlay.open').forEach(m=>m.classList.remove('open'));
+    }
+  });
+})();
+</script>
+</body>
+</html>

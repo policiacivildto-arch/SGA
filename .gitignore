@@ -1,0 +1,21 @@
+# Python
+venv/
+.venv/
+.venv-1/
+__pycache__/
+*.pyc
+db.sqlite3
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# VSCode
+.vscode/
+
+# Windows
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log

@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SALT · Sistema de Controle de Armas e Estoque — PCCE</title>
+<style>
+:root {
+  --primary:#1a237e; --primary-light:#283593; --primary-dark:#0d1642;
+  --accent:#1565c0; --accent2:#0288d1;
+  --success:#2e7d32; --warning:#e65100; --danger:#b71c1c; --info:#6a1b9a;
+  --bg:#f0f2f7; --card:#ffffff; --text:#1a1a2e; --text-light:#5c6070;
+  --border:#d0d4e8; --shadow:0 2px 12px rgba(26,35,126,.10);
+  --shadow-hover:0 6px 24px rgba(26,35,126,.18);
+  --radius:12px; --radius-sm:7px; --sidebar-w:240px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;}
+
+/* TOPBAR */
+.topbar{background:linear-gradient(90deg,var(--primary-dark) 0%,var(--primary) 60%,var(--accent) 100%);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:56px;position:sticky;top:0;z-index:1000;box-shadow:0 2px 8px rgba(0,0,0,.35);}
+.topbar-brand{display:flex;align-items:center;gap:12px;font-weight:800;font-size:1.15rem;letter-spacing:1px;}
+.topbar-brand span{font-size:.75rem;font-weight:400;opacity:.75;margin-left:4px;}
+.topbar-subtitle{font-size:.78rem;opacity:.7;text-align:right;}
+
+/* LAYOUT */
+.app-body{display:flex;flex:1;min-height:calc(100vh - 56px);}
+
+/* SIDEBAR CLÁSSICA */
+.sidebar{width:var(--sidebar-w);background:var(--primary-dark);color:#fff;display:flex;flex-direction:column;padding:16px 0;position:sticky;top:56px;height:calc(100vh - 56px);overflow-y:auto;flex-shrink:0;box-shadow:2px 0 10px rgba(0,0,0,.25);}
+.sidebar-section{padding:10px 16px 4px;font-size:.68rem;font-weight:700;letter-spacing:1.5px;opacity:.45;text-transform:uppercase;}
+.sidebar-item{display:flex;align-items:center;gap:10px;padding:10px 20px;cursor:pointer;font-size:.875rem;border-left:3px solid transparent;transition:all .2s;color:rgba(255,255,255,.78);}
+.sidebar-item:hover{background:rgba(255,255,255,.08);color:#fff;border-left-color:var(--accent2);}
+.sidebar-item.active{background:rgba(255,255,255,.14);color:#fff;border-left-color:#64b5f6;font-weight:600;}
+.sidebar-divider{border:none;border-top:1px solid rgba(255,255,255,.1);margin:8px 16px;}
+
+/* MAIN */
+.main{flex:1;padding:28px 32px;overflow-y:auto;}
+.page{display:none;} .page.active{display:block;}
+
+/* CARDS PREMIUM */
+.card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin-bottom:20px;}
+.card-title{font-size:1rem;font-weight:700;color:var(--primary);margin-bottom:16px;display:flex;align-items:center;gap:8px;}
+
+/* STATS GRID CLÁSSICO */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:14px;margin-bottom:24px;}
+.stat-card{background:var(--card);border-radius:var(--radius);padding:14px 12px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:6px;border-top:4px solid var(--primary);cursor:pointer;transition:all 0.15s;}
+.stat-card:hover{box-shadow:var(--shadow-hover);transform:translateY(-2px);}
+.stat-card.active-filter{border:2px solid var(--accent);box-shadow:var(--shadow-hover);transform:scale(1.02);}
+.stat-card.green{border-top-color:#43a047;} .stat-card.orange{border-top-color:#fb8c00;}
+.stat-card.red{border-top-color:#e53935;} .stat-card.blue{border-top-color:#1e88e5;}
+.stat-card.purple{border-top-color:#8e24aa;} .stat-card.teal{border-top-color:#00897b;}
+
+/* GRÁFICOS COMPACTOS EM LINHA */
+.chart-row-3 {display:grid;grid-template-columns:repeat(3, 1fr);gap:20px;margin-bottom:20px;}
+.chart-v-container {display:flex;align-items:flex-end;justify-content:space-around;height:180px;padding-top:20px;border-bottom:2px solid var(--border);position:relative;}
+.chart-v-bar-wrapper {display:flex;flex-direction:column;align-items:center;cursor:pointer;width:100%;transition:opacity 0.2s;}
+.chart-v-bar-wrapper.active-filter .chart-v-bar {border:2px solid #000;box-shadow:var(--shadow-hover);}
+.chart-v-bar-wrapper.filtered-out {opacity:0.25;}
+.chart-v-bar {width:24px;background:linear-gradient(180deg, var(--accent) 0%, var(--primary) 100%);border-radius:4px 4px 0 0;transition:height 0.4s ease;}
+.chart-v-bar.color-2 {background:linear-gradient(180deg, var(--accent2) 0%, var(--accent) 100%);}
+.chart-v-bar.color-3 {background:linear-gradient(180deg, var(--success) 0%, #1b5e20 100%);}
+.chart-v-val {font-size:0.68rem;font-weight:700;color:var(--primary);margin-bottom:2px;}
+.chart-v-label {font-size:0.65rem;color:var(--text-light);margin-top:6px;text-align:center;max-width:55px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+/* DONUT CHART */
+.chart-donut-container {display:flex;align-items:center;justify-content:center;height:180px;gap:15px;}
+.chart-donut {width:100px;height:100px;border-radius:50%;background:radial-gradient(circle, #fff 40%, transparent 41%), conic-gradient(var(--accent) 0% 40%, var(--accent2) 40% 75%, var(--warning) 75% 100%);display:flex;align-items:center;justify-content:center;font-size:1.1rem;font-weight:700;color:var(--primary);box-shadow:var(--shadow);}
+.chart-donut-legend {display:flex;flex-direction:column;gap:5px;font-size:0.7rem;color:var(--text);}
+.chart-donut-legend-item {display:flex;align-items:center;gap:6px;}
+
+/* SEARCH BAR */
+.search-bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px;background:#eef1fb;padding:12px;border-radius:var(--radius-sm);}
+.search-bar input,.search-bar select{padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:.875rem;background:#fff;}
+
+/* COMPONENTES DE FORMULÁRIO */
+.btn {display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:var(--radius-sm);border:none;cursor:pointer;font-size:.875rem;font-weight:600;transition:all 0.18s;}
+.btn-primary {background:var(--primary);color:#fff;} .btn-primary:hover{background:var(--primary-light);}
+.btn-outline {background:transparent;border:1.5px solid var(--primary);color:var(--primary);}
+.btn-outline:hover {background:var(--primary);color:#fff;}
+.btn-sm{padding:5px 11px;font-size:.8rem;} .btn-xs{padding:3px 8px;font-size:.75rem;border-radius:5px;}
+
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;}
+.form-group{display:flex;flex-direction:column;gap:5px;} .form-group.full{grid-column:1/-1;}
+.form-group label{font-size:.8rem;font-weight:600;color:var(--primary);}
+.form-group input,.form-group select,.form-group textarea{border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:9px 12px;font-size:0.875rem;background:#f8f9fd;color:var(--text);width:100%;}
+
+/* TABLE DESIGN */
+.table-wrap{overflow-x:auto;border-radius:var(--radius-sm);margin-top:16px;border:1px solid var(--border);background:#fff;}
+table{width:100%;border-collapse:collapse;font-size:.85rem;background:#fff;}
+thead tr{background:var(--primary);color:#fff;}
+thead th{padding:12px 14px;text-align:left;font-weight:600;border-bottom:2px solid var(--primary-dark);cursor:pointer;user-select:none;}
+thead th:hover{background:var(--primary-light);}
+tbody tr{border-bottom:1px solid var(--border);transition:background .15s;}
+tbody tr:last-child{border-bottom:none;}
+tbody tr:hover{background:#f4f6fa;}
+tbody td{padding:12px 14px;vertical-align:middle;color:var(--text);line-height:1.4;}
+
+.batch-box {background:#eef1fb;border:2px dashed var(--primary);border-radius:var(--radius);padding:16px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.batch-info {font-size:0.82rem;color:var(--primary-dark);line-height:1.4;flex:1;}
+.batch-actions {display:flex;gap:8px;align-items:center;}
+.grid-full-width {grid-column: 1 / -1;}
+
+/* ALERT CONTROL */
+.alert{padding:12px 16px;border-radius:var(--radius-sm);font-size:.875rem;font-weight:500;margin-bottom:14px;display:none;}
+.alert.show{display:block !important;}
+.alert-success{background:#e8f5e9;color:#2e7d32;border-left:4px solid #43a047;}
+.alert-danger{background:#ffebee;color:#b71c1c;border-left:4px solid #e53935;}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:.73rem;font-weight:700;}
+.badge-orange{background:#fff3e0;color:#e65100;} .badge-blue{background:#e3f2fd;color:#1565c0;} .badge-green{background:#e8f5e9;color:#2e7d32;} .badge-red{background:#ffebee;color:#b71c1c;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-brand">🛡️ SALT <span>·</span> Sistema de Controle de Armas e Estoque <span>— DTO · PCCE</span></div>
+  <div class="topbar-subtitle">Módulo Integrado de Gestão Operacional</div>
+</div>
+
+<div class="app-body">
+
+<nav class="sidebar" id="main-sidebar">
+  <div class="sidebar-section">Serviços de Armas</div>
+  <div class="sidebar-item active" onclick="navigate('pg-dash-servicos')"><span class="icon">📊</span> Dashboard Serviços</div>
+  <div class="sidebar-item" onclick="navigate('pg-registros')"><span class="icon">📋</span> Registros de Serviço</div>
+  <div class="sidebar-item" onclick="navigate('pg-novo-servico')"><span class="icon">➕</span> Novo Serviço</div>
+  <hr class="sidebar-divider">
+  <div class="sidebar-section">Estoque & Distribuição</div>
+  <div class="sidebar-item" onclick="navigate('pg-dash-estoque')"><span class="icon">📈</span> Dashboard Estoque</div>
+  <div class="sidebar-item" onclick="navigate('pg-cautelas')"><span class="icon">📜</span> Cautelas</div>
+  <div class="sidebar-item" onclick="navigate('pg-relatorios')"><span class="icon">📑</span> Relatórios</div>
+  <hr class="sidebar-divider">
+  <div class="sidebar-section">Cadastros</div>
+  <div class="sidebar-item" onclick="navigate('pg-cad-policiais')"><span class="icon">👮</span> Policiais</div>
+  <div class="sidebar-item" onclick="navigate('pg-cad-lotacao')"><span class="icon">🏢</span> Lotações</div>
+  <div class="sidebar-item" onclick="navigate('pg-cad-itens')"><span class="icon">📦</span> Itens / Inventário</div>
+  <div class="sidebar-item" onclick="navigate('pg-cad-fornecedor')"><span class="icon">🏭</span> Fornecedores</div>
+</nav>
+
+<main class="main">
+
+<!-- DASHBOARD SERVIÇOS -->
+<div id="pg-dash-servicos" class="page active">
+  <div class="page-header flex justify-between items-center">
+    <div>
+      <h1>📊 Dashboard Analítico — Serviços de Armas</h1>
+      <p>Indicadores de manutenção estruturados — realize filtros cruzados clicando em qualquer elemento visual</p>
+    </div>
+    <button class="btn btn-outline btn-sm" onclick="navigate('pg-novo-servico')">➕ Novo Registro</button>
+  </div>
+  
+  <div class="stats-grid">
+    <div class="stat-card blue" id="card-f-todos" onclick="toggleStatFilter('')"><div class="stat-val" id="ds-total">0</div><div class="stat-label">📁 Total Geral</div></div>
+    <div class="stat-card red" id="card-f-aberto" onclick="toggleStatFilter('Aberto')"><div class="stat-val" id="ds-aberto">0</div><div class="stat-label">🔴 Abertos</div></div>
+    <div class="stat-card orange" id="card-f-andamento" onclick="toggleStatFilter('Em Andamento')"><div class="stat-val" id="ds-andamento">0</div><div class="stat-label">🟡 Em Andamento</div></div>
+    <div class="stat-card blue" id="card-f-peca" onclick="toggleStatFilter('Aguardando Peça')"><div class="stat-val" id="ds-peca">0</div><div class="stat-label">🔵 Aguard. Peça</div></div>
+    <div class="stat-card purple" id="card-f-teste" onclick="toggleStatFilter('Aguardando Teste')"><div class="stat-val" id="ds-teste">0</div><div class="stat-label">🟣 Aguard. Teste</div></div>
+    <div class="stat-card teal" id="card-f-fabrica" onclick="toggleStatFilter('Encaminhado à Fábrica')"><div class="stat-val" id="ds-fabrica">0</div><div class="stat-label">🟤 Na Fábrica</div></div>
+    <div class="stat-card green" id="card-f-concluido" onclick="toggleStatFilter('Concluído')"><div class="stat-val" id="ds-concluido">0</div><div class="stat-label">🟢 Concluídos</div></div>
+  </div>
+
+  <div class="chart-row-3">
+    <div class="card">
+      <div class="card-title">👨‍🔧 Serviços por Armeiro</div>
+      <div class="chart-v-container" id="chart-armeiro-v"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">⚙️ Tipo de Serviço Executado</div>
+      <div class="chart-v-container" id="chart-tipo-v"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">❓ Motivo / Causa do Chamado</div>
+      <div class="chart-donut-container">
+        <div class="chart-donut" id="chart-causa-donut">0</div>
+        <div class="chart-donut-legend" id="donut-legend"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🏢 Carga de Ordens por Departamento Executador</div>
+    <div class="chart-v-container" id="chart-depto-v" style="height: 220px;"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📋 Últimos Registros Realizados no Sistema</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ID</th><th>Data Rec.</th><th>Armeiro</th><th>Tipo</th><th>Policial</th><th>Modelo</th><th>Nº Série</th><th>Status</th></tr></thead>
+        <tbody id="tbody-dash-servicos"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- REGISTROS DE SERVIÇO -->
+<div id="pg-registros" class="page">
+  <div class="page-header"><h1>📋 Registros de Serviço de Armamentos</h1><p>Histórico geral de manutenção de carga</p></div>
+  <div class="card">
+    <div class="search-bar">
+      <input type="text" id="filter-serv-text" placeholder="🔍 Buscar por Nº Série, Matrícula, Armeiro ou Policial..." style="width:100%;" oninput="renderServicosTable()">
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ID</th><th>Data Rec.</th><th>Armeiro</th><th>Tipo</th><th>Matrícula</th><th>Policial</th><th>Depto.</th><th>Modelo</th><th>Nº Série</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody id="tbody-servicos"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- NOVO SERVIÇO -->
+<div id="pg-novo-servico" class="page">
+  <div class="page-header"><h1>➕ Novo Registro de Serviço</h1><p>Abertura manual de ficha de manutenção</p></div>
+  <div class="alert alert-success" id="alert-servico-ok">✅ Ficha de serviço salva com sucesso!</div>
+  <div class="alert alert-danger" id="alert-servico-err">⚠️ Erro: Preencha todos os campos obrigatórios.</div>
+  <div class="card">
+    <div class="form-grid">
+      <div class="form-group"><label>Tipo de Serviço *</label><select id="ns-tipo" onchange="checkTipoServicoEspecial(this.value)"></select></div>
+      <div class="form-group"><label>Armeiro Responsável *</label><select id="ns-armeiro"></select></div>
+      <div class="form-group"><label>Data Recebimento *</label><input type="date" id="ns-data-rec"></div>
+      <div class="form-group"><label>Data Devolução</label><input type="date" id="ns-data-dev"></div>
+      <div class="form-group"><label>Status *</label><select id="ns-status"></select></div>
+      <div class="form-group"><label>Causa / Motivo *</label><select id="ns-motivo"></select></div>
+    </div>
+    <div class="card-title mt-16">👮 Dados do Policial Recebedor</div>
+    <div class="form-grid">
+      <div class="form-group"><label>Matrícula *</label><input type="text" id="ns-matricula" oninput="autoFillPolicial('ns')"></div>
+      <div class="form-group"><label>Nome do Policial *</label><input type="text" id="ns-policial"></div>
+      <div class="form-group"><label>Departamento *</label><select id="ns-depto" onchange="updateLotacaoServico()"></select></div>
+      <div class="form-group"><label>Lotação da Unidade *</label><select id="ns-lotacao"><option value="">Selecione o depto primeiro</option></select></div>
+    </div>
+    <div class="card-title mt-16">🔫 Identificação do Armamento</div>
+    <div class="form-grid">
+      <div class="form-group"><label>Modelo *</label><select id="ns-modelo"></select></div>
+      <div class="form-group"><label>Número de Série *</label><input type="text" id="ns-serie"></div>
+    </div>
+    <div class="form-group full mt-16"><label>Descrição Detalhada do Reparo</label><textarea id="ns-descricao"></textarea></div>
+    <button class="btn btn-primary mt-16" onclick="salvarServico()">💾 Salvar Ordem de Serviço</button>
+  </div>
+</div>
+
+<!-- DASHBOARD ESTOQUE -->
+<div id="pg-dash-estoque" class="page">
+  <div class="page-header"><h1>📈 Dashboard Analítico do Estoque</h1><p>Balanço quantitativo geral do inventário</p></div>
+  <div class="stats-grid" id="stats-estoque-grid"></div>
+  <div class="grid-2">
+    <div class="card"><div class="card-title">📦 Distribuição por Categoria Geral</div><div class="chart-bar-wrap" id="chart-cat-estoque"></div></div>
+    <div class="card"><div class="card-title">🏢 Itens Distribuídos por Lotação / Unidade</div><div class="chart-bar-wrap" id="chart-modelo-estoque"></div></div>
+    <div class="card grid-full-width"><div class="card-title">🛡️ Ativos do Inventário por Status</div><div class="chart-bar-wrap" id="chart-status-estoque-v"></div></div>
+  </div>
+</div>
+
+<!-- CAUTELAS -->
+<div id="pg-cautelas" class="page">
+  <div class="page-header flex justify-between items-center">
+    <div><h1>📜 Controle Histórico de Cautelas</h1><p>Gerenciamento de saída e atribuição de armamento de carga</p></div>
+    <button class="btn btn-primary" onclick="clickNovaCautela()">➕ Registrar Nova Cautela</button>
+  </div>
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Nº Cautela</th><th>Data Saída</th><th>Policial</th><th>Matrícula</th><th>Lotação</th><th>Material Cautelado</th><th>Qtd</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody id="tbody-cautelas-abertas"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- RELATÓRIOS -->
+<div id="pg-relatorios" class="page">
+  <div class="page-header"><h1>📑 Relatório Geral de Movimentação</h1><p>Histórico consolidado do almoxarifado</p></div>
+  <div class="card">
+    <button class="btn btn-primary" onclick="gerarRelatorio()">🔍 Atualizar Histórico</button>
+    <div class="table-wrap mt-16" id="card-relatorio">
+      <table>
+        <thead><tr><th>Data</th><th>Tipo Movimentação</th><th>Item / Carga</th><th>Qtd</th><th>Policial</th><th>Unidade / Lotação</th></tr></thead>
+        <tbody id="tbody-relatorio"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- CADASTRO POLICIAIS -->
+<div id="pg-cad-policiais" class="page">
+  <div class="page-header flex justify-between items-center">
+    <div><h1>👮 Gerenciamento de Policiais</h1><p>Relação de servidores ativos no sistema de logística</p></div>
+    <button class="btn btn-primary" onclick="clickNovoPolicial()">➕ Cadastrar Servidor</button>
+  </div>
+  <div class="batch-box">
+    <div class="batch-info"><strong>👮 Carga de Servidores em Lote</strong><br>Importe a lista de policiais via arquivo Excel ou delimitado.</div>
+    <div class="batch-actions">
+      <button class="btn btn-outline btn-sm" onclick="downloadModelo('policiais')">📥 Modelo .XLS</button>
+      <input type="file" id="file-batch-policiais" accept=".xls,.xlsx,.csv" style="display:none" onchange="importarLote('policiais')">
+      <button class="btn btn-info btn-sm" onclick="document.getElementById('file-batch-policiais').click()">📤 Enviar Arquivo</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="search-bar">
+      <input type="text" id="search-policiais" placeholder="🔍 Buscar por Nome, Matrícula, Cargo ou Unidade..." style="width:100%;" oninput="renderPoliciaisTable()">
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="sortTable('policiais','matricula')">Matrícula</th>
+            <th onclick="sortTable('policiais','nome')">Nome Completo</th>
+            <th onclick="sortTable('policiais','cargo')">Cargo / Posto</th>
+            <th onclick="sortTable('policiais','depto')">Departamento</th>
+            <th onclick="sortTable('policiais','lotacao')">Lotação Designada</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-policiais"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- CADASTRO LOTAÇÕES -->
+<div id="pg-cad-lotacao" class="page">
+  <div class="page-header flex justify-between items-center">
+    <div><h1>🏢 Mapa de Unidades e Lotações</h1><p>Configuração territorial e circunscricional da PCCE</p></div>
+    <button class="btn btn-primary" onclick="clickNovaLotacao()">➕ Nova Lotação</button>
+  </div>
+  <div class="batch-box">
+    <div class="batch-info"><strong>🏢 Carga de Lotações Territoriais</strong><br>Importe a planilha oficial contendo Seccionais, Áreas de Atuação e AIS.</div>
+    <div class="batch-actions">
+      <button class="btn btn-outline btn-sm" onclick="downloadModelo('lotacoes')">📥 Modelo .XLS</button>
+      <input type="file" id="file-batch-lotacoes" accept=".xls,.xlsx,.csv" style="display:none" onchange="importarLote('lotacoes')">
+      <button class="btn btn-info btn-sm" onclick="document.getElementById('file-batch-lotacoes').click()">📤 Enviar Arquivo</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="search-bar">
+      <input type="text" id="search-lotacoes" placeholder="🔍 Pesquisar por Departamento, Unidade, Seccional, AIS ou Cidade..." style="width:100%;" oninput="renderLotacoesTable()">
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="sortTable('lotacoes','depto')">Departamento</th>
+            <th onclick="sortTable('lotacoes','nome')">Nome da Unidade</th>
+            <th onclick="sortTable('lotacoes','cidade')">Cidade</th>
+            <th onclick="sortTable('lotacoes','seccional')">Seccional</th>
+            <th onclick="sortTable('lotacoes','circunscricao')">Circunscrição / Abrangência</th>
+            <th onclick="sortTable('lotacoes','ais')">AIS</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-lotacoes"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- CADASTRO ITENS -->
+<div id="pg-cad-itens" class="page">
+  <div class="page-header flex justify-between items-center">
+    <div><h1>📦 Carga Geral do Inventário</h1><p>Material bélico, munições, EPIs e ativos do almoxarifado</p></div>
+    <button class="btn btn-primary" onclick="abrirModalItem()">➕ Adicionar Item Manual</button>
+  </div>
+  <div class="batch-box">
+    <div class="batch-info"><strong>📦 Carga e Importação de Inventário em Lote</strong><br>Suba listas completas de armamentos ou lotes de cartuchos via planilha.</div>
+    <div class="batch-actions">
+      <button class="btn btn-outline btn-sm" onclick="downloadModelo('itens')">📥 Modelo .XLS</button>
+      <input type="file" id="file-batch-itens" accept=".xls,.xlsx,.csv" style="display:none" onchange="importarLote('itens')">
+      <button class="btn btn-info btn-sm" onclick="document.getElementById('file-batch-itens').click()">📤 Enviar Planilha</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="search-bar">
+      <input type="text" id="search-itens" placeholder="🔍 Pesquisar por Patrimônio, Descrição, Série ou Categoria..." style="width:100%;" oninput="renderItensTable()">
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="sortTable('itens','patrimonio')">Patrimônio</th>
+            <th onclick="sortTable('itens','descricao')">Descrição</th>
+            <th onclick="sortTable('itens','categoria')">Categoria</th>
+            <th onclick="sortTable('itens','serie')">Série</th>
+            <th onclick="sortTable('itens','qtdTotal')">Total</th>
+            <th onclick="sortTable('itens','qtdDisp')">Disponível</th>
+            <th onclick="sortTable('itens','qtdMin')">Mínimo</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-itens"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- CADASTRO FORNECEDORES -->
+<div id="pg-cad-fornecedor" class="page">
+  <div class="page-header flex justify-between items-center">
+    <div><h1>🏭 Cadastro e Homologação de Fornecedores</h1><p>Gerenciamento de fabricantes e prestadores autorizados</p></div>
+    <button class="btn btn-primary" onclick="abrirModalFornecedor()">➕ Novo Fornecedor</button>
+  </div>
+  <div class="batch-box">
+    <div class="batch-info"><strong>📑 Captura e Cadastro por Arquivo de Nota Fiscal (NF-e)</strong><br>Selecione um arquivo de nota fiscal digital (XML ou TXT) para ler e extrair a Razão Social e CNPJ automaticamente.</div>
+    <div class="batch-actions">
+      <input type="file" id="file-nfe-fornecedor" accept=".xml,.txt" style="display:none" onchange="importarNFeFornecedor()">
+      <button class="btn btn-info btn-sm" onclick="document.getElementById('file-nfe-fornecedor').click()">📤 Ler Nota Fiscal Digital</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="search-bar">
+      <input type="text" id="search-fornecedores" placeholder="🔍 Pesquisar por Razão Social, CNPJ ou Contato..." style="width:100%;" oninput="renderFornecedoresTable()">
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="sortTable('fornecedores','nome')">Razão Social</th>
+            <th onclick="sortTable('fornecedores','cnpj')">CNPJ / CPF</th>
+            <th onclick="sortTable('fornecedores','contato')">Contato</th>
+            <th onclick="sortTable('fornecedores','tel')">Telefone</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-fornecedores"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+</main>
+</div> <!-- FIM DO APP-BODY -->
+
+<!-- ==============================================
+     CONTAINER ABSOLUTO DE MODAIS OPERACIONAIS 
+     ============================================== -->
+
+<!-- MODAL POLICIAL -->
+<div class="modal-overlay" id="modal-policial">
+  <div class="modal">
+    <div class="modal-header"><h2>👮 Cadastro de Servidor Policial</h2><button class="modal-close" onclick="fecharModal('modal-policial')">×</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label>Matrícula *</label><input type="text" id="pol-matricula" placeholder="Ex.: 1234567"></div>
+        <div class="form-group"><label>Nome Completo *</label><input type="text" id="pol-nome" placeholder="Nome do policial"></div>
+        <div class="form-group"><label>Cargo / Posto *</label>
+          <select id="pol-cargo">
+            <option value="Delegado de Polícia">Delegado de Polícia</option>
+            <option value="Oficial Investigador de Polícia">Oficial Investigador de Polícia</option>
+            <option value="Outros">Outros (Inserir Manualmente)</option>
+          </select>
+        </div>
+        <div class="form-group" id="group-pol-cargo-manual" style="display:none"><label>Especifique o Cargo Manual *</label><input type="text" id="pol-cargo-manual"></div>
+        <div class="form-group"><label>Departamento *</label><select id="pol-depto" onchange="updateLotacaoModalPolicial()"><option value="">Selecione...</option></select></div>
+        <div class="form-group"><label>Lotação da Unidade *</label><select id="pol-lotacao"><option value="">Selecione o depto primeiro</option></select></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharModal('modal-policial')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarPolicial()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CAUTELA -->
+<div class="modal-overlay" id="modal-cautela">
+  <div class="modal">
+    <div class="modal-header"><h2>📜 Registrar Cautela Operacional</h2><button class="modal-close" onclick="fecharModal('modal-cautela')">×</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label>Nº Cautela</label><input type="text" id="caut-numero" readonly style="background:#e8ebf7"></div>
+        <div class="form-group"><label>Data de Saída *</label><input type="date" id="caut-data-saida"></div>
+        <div class="form-group"><label>Matrícula Policial *</label><input type="text" id="caut-matricula" oninput="autoFillPolicial('caut')"></div>
+        <div class="form-group"><label>Nome do Servidor</label><input type="text" id="caut-policial" readonly style="background:#e8ebf7"></div>
+        <div class="form-group"><label>Lotação Automática</label><input type="text" id="caut-lotacao-auto" readonly style="background:#e8ebf7"></div>
+        <div class="form-group full"><label>Material / Item Disponível *</label><select id="caut-item"></select></div>
+        <div class="form-group"><label>Quantidade Desejada *</label><input type="number" id="caut-qtd" value="1" min="1"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharModal('modal-cautela')">Cancelar</button>
+      <button class="btn btn-success" onclick="salvarCautela()">💾 Efetivar Cautela</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DEVOLUÇÃO DE CAUTELA -->
+<div class="modal-overlay" id="modal-devolucao">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header"><h2>↩️ Registrar Devolução</h2><button class="modal-close" onclick="fecharModal('modal-devolucao')">×</button></div>
+    <div class="modal-body">
+      <div id="dev-info" style="background:#f0f4ff;border-radius:8px;padding:14px;margin-bottom:16px;font-size:.87rem;line-height:1.7"></div>
+      <div class="form-grid">
+        <div class="form-group"><label>Data de Devolução *</label><input type="date" id="dev-data"></div>
+        <div class="form-group"><label>Condição do Item</label>
+          <select id="dev-condicao">
+            <option>Bom estado</option><option>Com avaria</option><option>Danificado</option><option>Extraviado</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Item volta para estoque?</label>
+          <select id="dev-retorna-estoque">
+            <option value="sim">Sim</option>
+            <option value="nao">Não</option>
+          </select>
+        </div>
+        <div class="form-group full"><label>Observações</label><textarea id="dev-obs" placeholder="Observações sobre a devolução..."></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharModal('modal-devolucao')">Cancelar</button>
+      <button class="btn btn-warning" onclick="confirmarDevolucao()">↩️ Confirmar Devolução</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ITEM -->
+<div class="modal-overlay" id="modal-item">
+  <div class="modal">
+    <div class="modal-header"><h2>📦 Cadastro de Item Bélico / Logística</h2><button class="modal-close" onclick="fecharModal('modal-item')">×</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label>Nº Patrimônio</label><input type="text" id="item-patrimonio" placeholder="Ex: PAT-2026"></div>
+        <div class="form-group"><label>Categoria Geral *</label>
+          <select id="item-categoria-arvore" onchange="renderArvoreInventario(this.value)">
+            <option value="">Selecione...</option>
+            <option value="Armas">Armas</option>
+            <option value="Coletes">Coletes</option>
+            <option value="Equipamentos">Equipamentos</option>
+            <option value="Uniformes">Uniformes</option>
+          </select>
+        </div>
+        <div class="form-group" id="g-item-tipo" style="display:none"><label>Tipo de Item *</label><select id="item-tipo-arvore" onchange="renderModelosArvore(this.value)"></select></div>
+        <div class="form-group" id="g-item-tipo-manual" style="display:none"><label>Especifique o Tipo Manual *</label><input type="text" id="item-tipo-manual"></div>
+        <div class="form-group" id="g-item-marca" style="display:none"><label>Marca / Fabricante *</label><select id="item-marca-arvore" onchange="renderSubModelos(this.value)"></select></div>
+        <div class="form-group" id="g-item-marca-manual" style="display:none"><label>Especifique a Marca Manual *</label><input type="text" id="item-marca-manual"></div>
+        <div class="form-group" id="g-item-modelo" style="display:none"><label>Modelo Específico *</label><select id="item-modelo-arvore" onchange="checkModeloManual(this.value)"></select></div>
+        <div class="form-group" id="g-item-modelo-manual" style="display:none"><label>Especifique o Modelo Manual *</label><input type="text" id="item-modelo-manual"></div>
+        
+        <div class="form-group"><label>Nº de Série</label><input type="text" id="item-serie" placeholder="Ex: ABC1234"></div>
+        <div class="form-group"><label>Quantidade Total *</label><input type="number" id="item-qtd-total" value="1" min="1"></div>
+        <div class="form-group"><label>Quantidade Disponível *</label><input type="number" id="item-qtd-disp" value="1" min="0"></div>
+        <div class="form-group"><label>Estoque Mínimo Alerta *</label><input type="number" id="item-qtd-min" value="1" min="0"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharModal('modal-item')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarItem()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDICAO SERVICO -->
+<div class="modal-overlay" id="modal-edit-servico">
+  <div class="modal">
+    <div class="modal-header"><h2>✏️ Alterar Ordem de Serviço</h2><button class="modal-close" onclick="fecharModal('modal-edit-servico')">×</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-servico-id">
+      <div class="form-grid">
+        <div class="form-group"><label>Status da Ordem</label>
+          <select id="edit-servico-status">
+            <option value="Aberto">Aberto</option>
+            <option value="Em Andamento">Em Andamento</option>
+            <option value="Aguardando Peça">Aguardando Peça</option>
+            <option value="Aguardando Teste">Aguardando Teste</option>
+            <option value="Encaminhado à Fábrica">Encaminhado à Fábrica</option>
+            <option value="Concluído">Concluído</option>
+          </select>
+        </div>
+        <div class="form-group full"><label>Histórico / Despacho do Armeiro</label><textarea id="edit-servico-desc"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="fecharModal('modal-edit-servico')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarEdicaoServico()">💾 Atualizar Ficha</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PREVIEW TERMO -->
+<div class="modal-overlay" id="modal-termo-pdf">
+  <div class="modal" style="max-width:850px">
+    <div class="modal-header"><h2>🖨️ Documento Oficial — Termo de Cautela</h2><button class="modal-close" onclick="fecharModal('modal-termo-pdf')">×</button></div>
+    <div class="modal-body">
+      <button class="btn btn-success mb-16" onclick="imprimirTermoDiv()">🖨️ Imprimir / Gerar PDF</button>
+      <div id="termo-oficial-print-area"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL LOTACAO -->
+<div class="modal-overlay" id="modal-lotacao"><div class="modal"><div class="modal-header"><h2>🏢 Unidade / Lotação</h2><button class="modal-close" onclick="fecharModal('modal-lotacao')">×</button></div><div class="modal-body"><input type="hidden" id="edit-lot-id"><div class="form-grid"><div class="form-group"><label>Depto *</label><input type="text" id="lot-depto"></div><div class="form-group"><label>Nome *</label><input type="text" id="lot-nome"></div><div class="form-group"><label>Cidade *</label><input type="text" id="lot-cidade" value="Fortaleza"></div><div class="form-group"><label>Seccional</label><input type="text" id="lot-seccional"></div><div class="form-group"><label>AIS *</label><input type="text" id="lot-ais"></div><div class="form-group full"><label>Circunscrição</label><textarea id="lot-circunscricao"></textarea></div><div class="form-group full"><label>Endereço</label><input type="text" id="lot-end"></div></div></div><div class="modal-footer"><button class="btn btn-outline" onclick="fecharModal('modal-lotacao')">Cancelar</button><button class="btn btn-primary" onclick="salvarLotacaoManual()">💾 Salvar</button></div></div></div>
+
+<!-- MODAL FORNECEDOR -->
+<div class="modal-overlay" id="modal-fornecedor"><div class="modal"><div class="modal-header"><h2>🏭 Fornecedor Homologado</h2><button class="modal-close" onclick="fecharModal('modal-fornecedor')">×</button></div><div class="modal-body"><input type="hidden" id="edit-forn-id"><div class="form-grid"><div class="form-grid"><div class="form-group"><label>Razão Social *</label><input type="text" id="forn-nome"></div><div class="form-group"><label>CNPJ</label><input type="text" id="forn-cnpj"></div><div class="form-group"><label>Contato</label><input type="text" id="forn-contato"></div><div class="form-group"><label>Telefone</label><input type="text" id="forn-tel"></div></div></div><div class="modal-footer"><button class="btn btn-outline" onclick="fecharModal('modal-fornecedor')">Cancelar</button><button class="btn btn-primary" onclick="salvarFornecedor()">💾 Salvar</button></div></div></div>
+
+<script>
+// EXCEL MATCH - COMPILADOR ALFANUMÉRICO DE ORDENAÇÃO NATURAL
+const naturalCollator = new Intl.Collator('pt-BR', { numeric: true, sensitivity: 'base' });
+
+const LISTAS = {
+  armeiros: ['Thales', 'Santiago', 'Sales', 'Raimundo'],
+  tiposServico: ['Manutenção', 'Limpeza', 'Reposição de Peça', 'Reposição de Arma'],
+  status: ['Aberto', 'Em Andamento', 'Aguardando Peça', 'Aguardando Teste', 'Encaminhado à Fábrica', 'Concluído'],
+  causasNormal: ['Mal Uso', 'Manutenção Preventiva', 'Quebra de Peça'],
+  causasEspecial: ['Furto', 'Roubo', 'Extravio'],
+  modelos: ['G17', 'G19', 'G26', 'P320 9mm', 'P320 .40', 'PT-100', 'PT-101', 'PT-640', 'PT-840', 'PT-940', 'PT-24/7', 'APX', 'REVOLVER', 'RF 14 5.56', 'IA2', 'BUSHMASTER', 'AR10', 'MPX', 'CT40', 'CTT40', 'SMT40', 'MT9mm', 'BENELLI']
+};
+
+const ARVORE_PRODUTOS = {
+  Armas: {
+    "Pistola": {
+      "Glock": ["G17", "G19", "G26", "Outros"],
+      "Sig Sauer": ["P320 9mm", "P320 .40", "Outros"],
+      "Taurus": ["PT-100", "PT-101", "PT-640", "PT-840", "PT-940", "PT-24/7", "Outros"],
+      "Beretta": ["APX", "Outros"],
+      "Revolver": ["Padrão", "Outros"]
+    },
+    "Fuzil": { "Radical Firearms": ["RF 14 5.56", "Outros"], "Imbel": ["IA2", "Outros"], "Bushmaster": ["Padrão"] },
+    "Fuzil Sniper": { "Armalite": ["AR10", "Outros"] },
+    "Carabina": { "Sig Sauer": ["MPX"], "Taurus": ["CT .40", "CTT .40", "SMT .40", "MT 9mm", "MT .40", "Outros"] },
+    "Calibre 12": { "Benelli": ["Padrão"] }
+  },
+  Coletes: { "Nível IIIA": { "Protecta": ["Padrão", "Outros"], "Imbraland": ["Padrão", "Outros"] } },
+  Equipamentos: { "Acessórios": { "PCCE": ["Rádio Comunicador (Fixo)", "Rádio Comunicador (Móvel)", "Rádio Comunicador (HT)", "Drones", "Detector de Metal", "Algema", "Kit Arrombamento", "Outros"] } },
+  Uniformes: { "Vestuário": { "PCCE": ["Calça Tática", "Camisa Gola Polo", "Cinto BDU", "Cinto de Guarnição", "Combat Shirt", "Jaqueta Tática", "Capa de Chuva", "Bota Tática", "Outros"] } }
+};
+
+let DB = {
+  servicos:     JSON.parse(localStorage.getItem('salt_servicos')    || '[]'),
+  policiais:    JSON.parse(localStorage.getItem('salt_policiais')   || '[]'),
+  lotacoes:     JSON.parse(localStorage.getItem('salt_lotacoes')    || '[]'),
+  itens:        JSON.parse(localStorage.getItem('salt_itens')       || '[]'),
+  fornecedores: JSON.parse(localStorage.getItem('salt_fornecedores')|| '[]'),
+  cautelas:     JSON.parse(localStorage.getItem('salt_cautelas')    || '[]'),
+  movimentos:   JSON.parse(localStorage.getItem('salt_movimentos')  || '[]'),
+};
+
+const SORT = {}; const PAG = {}; 
+let editandoPolicialId = null; 
+let editandoLotacaoId = null; 
+let activeFilters = { armeiro: '', tipo: '', status: '' };
+let devCautId = null;
+
+function salvar(chave){ localStorage.setItem('salt_'+chave, JSON.stringify(DB[chave])); }
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function hoje(){ return new Date().toISOString().slice(0,10); }
+function fmtData(d){ if(!d) return '—'; const [y,m,dd]=d.split('-'); return `${dd}/${m}/${y}`; }
+
+function navigate(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.sidebar-item').forEach(s=>s.classList.remove('active'));
+  const pg = document.getElementById(id); if(pg) pg.classList.add('active');
+  document.querySelectorAll('.sidebar-item').forEach(s=>{ if(s.getAttribute('onclick')?.includes(id)) s.classList.add('active'); });
+
+  if(id==='pg-dash-servicos') renderDashServicos();
+  if(id==='pg-registros')     renderServicosTable();
+  if(id==='pg-cad-lotacao')   renderLotacoesTable();
+  if(id==='pg-cad-policiais') renderPoliciaisTable();
+  if(id==='pg-cad-itens')     renderItensTable();
+  if(id==='pg-cad-fornecedor')renderFornecedoresTable();
+  if(id==='pg-cautelas')      renderCautelasTable();
+  if(id==='pg-dash-estoque')  renderDashEstoque();
+  if(id==='pg-novo-servico')  { setupFormListas(); populateDeptos(); }
+}
+
+function setupFormListas() {
+  const mTipo = document.getElementById('ns-tipo');
+  const mArmeiro = document.getElementById('ns-armeiro');
+  const mStatus = document.getElementById('ns-status');
+  const mModelo = document.getElementById('ns-modelo');
+  
+  if(mTipo) { mTipo.innerHTML = '<option value="">Selecione o tipo de serviço...</option>'; LISTAS.tiposServico.forEach(x => { mTipo.innerHTML += `<option value="${x}">${x}</option>`; }); }
+  if(mArmeiro) { mArmeiro.innerHTML = '<option value="">Selecione o armeiro...</option>'; LISTAS.armeiros.forEach(x => { mArmeiro.innerHTML += `<option value="${x}">${x}</option>`; }); }
+  if(mStatus) { mStatus.innerHTML = '<option value="">Selecione o status...</option>'; LISTAS.status.forEach(x => { mStatus.innerHTML += `<option value="${x}">${x}</option>`; }); }
+  if(mModelo) { mModelo.innerHTML = '<option value="">Selecione o modelo...</option>'; LISTAS.modelos.forEach(x => { mModelo.innerHTML += `<option value="${x}">${x}</option>`; }); }
+  checkTipoServicoEspecial("");
+}
+
+function checkTipoServicoEspecial(val) {
+  const mCausa = document.getElementById('ns-motivo'); if(!mCausa) return;
+  mCausa.innerHTML = '<option value="">Selecione a causa/motivo...</option>';
+  const arr = (val === 'Reposição de Arma') ? LISTAS.causasEspecial : LISTAS.causasNormal;
+  arr.forEach(x => { mCausa.innerHTML += `<option value="${x}">${x}</option>`; });
+}
+
+function renderChartBars(containerId, data) {
+  const c = document.getElementById(containerId); if(!c) return;
+  const max = Math.max(...data.map(d=>d.val), 1);
+  c.innerHTML = data.length === 0 ? '<p style="color:#999;font-size:.82rem;text-align:center;padding:20px">Sem dados estatísticos</p>' : 
+    data.map(d=>`<div class="chart-bar-item"><span class="chart-bar-label" title="${d.label}">${d.label}</span><div class="chart-bar-track"><div class="chart-bar-fill" style="width:${Math.round(d.val/max*100)}%;"></div></div><span class="chart-bar-val">${d.val}</span></div>`).join('');
+}
+
+function toggleStatFilter(status) {
+  activeFilters.status = activeFilters.status === status ? '' : status;
+  document.querySelectorAll('.stat-card').forEach(c=>c.classList.remove('active-filter'));
+  if(activeFilters.status) {
+    const idMap = { 'Aberto': 'card-f-aberto', 'Em Andamento': 'card-f-andamento', 'Concluído': 'card-f-concluido' };
+    if(idMap[status]) document.getElementById(idMap[status]).classList.add('active-filter');
+  }
+  applyCrossFilters();
+}
+
+function toggleChartFilter(key, value) {
+  activeFilters[key] = activeFilters[key] === value ? '' : value;
+  applyCrossFilters();
+}
+
+function applyCrossFilters() {
+  let arr = DB.servicos;
+  if(activeFilters.status) arr = arr.filter(s => s.status === activeFilters.status);
+  if(activeFilters.armeiro) arr = arr.filter(s => s.armeiro === activeFilters.armeiro);
+  if(activeFilters.tipo) arr = arr.filter(s => s.tipo === activeFilters.tipo);
+  
+  const tbody = document.getElementById('tbody-dash-servicos'); if(!tbody) return;
+  tbody.innerHTML = arr.slice(-5).map(r=>`<tr><td>${r.id}</td><td>${fmtData(r.dataRec)}</td><td>${r.armeiro}</td><td>${r.tipo}</td><td>${r.policial}</td><td>${r.modelo}</td><td>${r.serie}</td><td>${badgeStatus(r.status)}</td></tr>`).join('');
+}
+
+function renderDashServicos(){
+  document.getElementById('ds-total').textContent = DB.servicos.length;
+  document.getElementById('ds-aberto').textContent = DB.servicos.filter(s=>s.status==='Aberto').length;
+  document.getElementById('ds-andamento').textContent = DB.servicos.filter(s=>s.status==='Em Andamento').length;
+  document.getElementById('ds-concluido').textContent = DB.servicos.filter(s=>s.status==='Concluído').length;
+
+  const bArmeiro = {}; DB.servicos.forEach(s=>{ bArmeiro[s.armeiro] = (bArmeiro[s.armeiro]||0)+1; });
+  const maxArm = Math.max(...Object.values(bArmeiro), 1);
+  document.getElementById('chart-armeiro-v').innerHTML = Object.entries(bArmeiro).map(([k,v]) => `
+    <div class="chart-v-bar-wrapper ${activeFilters.armeiro === k ? 'active-filter' : ''} ${activeFilters.armeiro && activeFilters.armeiro !== k ? 'filtered-out' : ''}" onclick="toggleChartFilter('armeiro', '${k}')">
+      <span class="chart-v-val">${v}</span>
+      <div class="chart-v-bar" style="height:${Math.round(v/maxArm*120)}px;"></div>
+      <span class="chart-v-label">${k}</span>
+    </div>`).join('');
+
+  const bTipo = {}; DB.servicos.forEach(s=>{ bTipo[s.tipo] = (bTipo[s.tipo]||0)+1; });
+  const maxTp = Math.max(...Object.values(bTipo), 1);
+  document.getElementById('chart-tipo-v').innerHTML = Object.entries(bTipo).map(([k,v]) => `
+    <div class="chart-v-bar-wrapper ${activeFilters.tipo === k ? 'active-filter' : ''} ${activeFilters.tipo && activeFilters.tipo !== k ? 'filtered-out' : ''}" onclick="toggleChartFilter('tipo', '${k}')">
+      <span class="chart-v-val">${v}</span>
+      <div class="chart-v-bar color-2" style="height:${Math.round(v/maxTp*120)}px;"></div>
+      <span class="chart-v-label">${k}</span>
+    </div>`).join('');
+
+  const bDepto = {}; DB.servicos.forEach(s=>{ bDepto[s.depto] = (bDepto[s.depto]||0)+1; });
+  const maxDep = Math.max(...Object.values(bDepto), 1);
+  document.getElementById('chart-depto-v').innerHTML = Object.entries(bDepto).map(([k,v]) => `
+    <div class="chart-v-bar-wrapper">
+      <span class="chart-v-val">${v}</span>
+      <div class="chart-v-bar color-3" style="height:${Math.round(v/maxDep*140)}px; width:45px;"></div>
+      <span class="chart-v-label" style="max-width:110px;">${k}</span>
+    </div>`).join('');
+
+  const bCausa = {}; DB.servicos.forEach(s=>{ bCausa[s.motivo||'Rotina'] = (bCausa[s.motivo||'Rotina']||0)+1; });
+  const totalCausas = Object.values(bCausa).reduce((a,b)=>a+b, 0) || 1;
+  document.getElementById('chart-causa-donut').textContent = totalCausas;
+  
+  document.getElementById('donut-legend').innerHTML = Object.entries(bCausa).map(([k,v])=>`
+    <div class="chart-donut-legend-item">
+      <span style="display:inline-block;width:10px;height:10px;background:var(--accent);border-radius:50%;"></span>
+      <span>${k}: <b>${v}</b> (${Math.round(v/totalCausas*100)}%)</span>
+    </div>`).join('');
+
+  applyCrossFilters();
+}
+
+function renderDashEstoque(){
+  document.getElementById('stats-estoque-grid').innerHTML = `<div class="stat-card blue"><div class="stat-val">${DB.itens.reduce((s,i)=>s+parseInt(i.qtdTotal),0)}</div><div class="stat-label">Total de Itens</div></div><div class="stat-card green"><div class="stat-val">${DB.itens.reduce((s,i)=>s+parseInt(i.qtdDisp),0)}</div><div class="stat-label">Disponíveis</div></div><div class="stat-card orange"><div class="stat-val">${DB.cautelas.filter(c=>c.status==='Ativa').length}</div><div class="stat-label">Cautelas Ativas</div></div>`;
+  const bModelo = {}; DB.itens.forEach(i=>{ bModelo[i.descricao] = (bModelo[i.descricao]||0)+parseInt(i.qtdTotal); });
+  renderChartBars('chart-modelo-estoque', Object.entries(bModelo).map(([k,v])=>({label:k,val:v})));
+  const bCat = {}; DB.itens.forEach(i=>{ bCat[i.categoria] = (bCat[i.categoria]||0)+parseInt(i.qtdTotal); });
+  renderChartBars('chart-cat-estoque', Object.entries(bCat).map(([k,v])=>({label:k,val:v})));
+}
+
+// SOLUÇÃO CRUCIAL DEFINITIVA CONTRA ERRO DE RECURSÃO INFINITA
+function clickNovaCautela() { abrirModalCautela(); }
+function clickNovoPolicial() { editandoPolicialId = null; abrirModalPolicialNativo(null); }
+function clickNovaLotacao() { editandoLotacaoId = null; abrirModalLotacaoNativo(null); }
+
+function abrirModalCautela(){
+  document.getElementById('caut-numero').value = 'CAU-' + Date.now().toString().slice(-6);
+  document.getElementById('caut-data-saida').value = hoje();
+  document.getElementById('caut-matricula').value = '';
+  document.getElementById('caut-policial').value = '';
+  document.getElementById('caut-lotacao-auto').value = '';
+  const sel = document.getElementById('caut-item'); if(!sel) return;
+  sel.innerHTML = '<option value="">Selecione o material...</option>';
+  DB.itens.filter(i => parseInt(i.qtdDisp) > 0).forEach(i => {
+    sel.innerHTML += `<option value="${i.id}">${i.descricao} [Nº Série: ${i.serie}] (Saldo: ${i.qtdDisp})</option>`;
+  });
+  abrirModal('modal-cautela');
+}
+
+function badgeStatus(s){
+  const m={'Aberto':'badge-red','Em Andamento':'badge-orange','Concluído':'badge-green'};
+  return `<span class="badge ${m[s]||'badge-blue'}">${s}</span>`;
+}
+
+function salvarCautela(){
+  const itemId = document.getElementById('caut-item').value;
+  const qtd = parseInt(document.getElementById('caut-qtd').value)||1;
+  const item = DB.itens.find(i=>i.id===itemId);
+  const mat = document.getElementById('caut-matricula').value.trim();
+  const polNome = document.getElementById('caut-policial').value;
+  const lotAuto = document.getElementById('caut-lotacao-auto').value;
+
+  if(!itemId || !mat || !polNome) { alert('Identificação funcional e insumo são de preenchimento obrigatório.'); return; }
+  if(!item || parseInt(item.qtdDisp) < qtd) { alert('Indisponibilidade física do saldo no Almoxarifado.'); return; }
+
+  item.qtdDisp = parseInt(item.qtdDisp) - qtd; salvar('itens');
+  const reg = { id: uid(), numero: document.getElementById('caut-numero').value, dataSaida: document.getElementById('caut-data-saida').value, policial: polNome, matricula: mat, lotacao: lotAuto, itemId: item.id, itemDesc: item.descricao, categoria: item.categoria, serie: item.serie, patrimonio: item.patrimonio, qtd: qtd, status: 'Ativa' };
+  
+  DB.cautelas.push(reg); salvar('cautelas');
+  registrarMovimento({ tipo: 'Saída (Cautela)', itemDesc: item.descricao, qtd: qtd, policial: reg.policial, lotacao: reg.lotacao });
+  fecharModal('modal-cautela'); renderCautelasTable();
+  gerarTermoDocumento(reg);
+}
+
+function renderCautelasTable(){
+  const tb = document.getElementById('tbody-cautelas-abertas');
+  if(!tb) return;
+
+  const rows = [...DB.cautelas].sort((a,b)=>String(b.dataSaida||'').localeCompare(String(a.dataSaida||'')));
+  if(!rows.length){
+    tb.innerHTML = '<tr><td colspan="9" class="text-center" style="padding:20px;color:#999">Nenhuma cautela registrada</td></tr>';
+    return;
+  }
+
+  tb.innerHTML = rows.map(r => {
+    const ativa = r.status === 'Ativa';
+    const badgeClass = ativa ? 'badge-orange' : 'badge-green';
+    const acoes = ativa
+      ? `<button class="btn btn-xs btn-warning" onclick="abrirDevolucao('${r.id}')" title="Registrar devolução">↩️ Devolver</button> <button class="btn btn-xs btn-info" onclick="chamarTermoHistorico('${r.id}')" title="Termo">🖨️</button>`
+      : `<button class="btn btn-xs btn-info" onclick="chamarTermoHistorico('${r.id}')" title="Termo">🖨️</button>`;
+
+    return `<tr>
+      <td><b>${r.numero || '—'}</b></td>
+      <td>${fmtData(r.dataSaida)}</td>
+      <td>${r.policial || '—'}</td>
+      <td>${r.matricula || '—'}</td>
+      <td>${r.lotacao || '—'}</td>
+      <td><b>${r.itemDesc || '—'}</b></td>
+      <td>${r.qtd || 0}</td>
+      <td><span class="badge ${badgeClass}">${r.status || '—'}</span></td>
+      <td>${acoes}</td>
+    </tr>`;
+  }).join('');
+}
+
+function abrirDevolucao(id){
+  devCautId = id;
+  const r = DB.cautelas.find(c => c.id === id);
+  if(!r) return;
+
+  document.getElementById('dev-info').innerHTML = `
+    <b>Cautela:</b> ${r.numero || '—'}<br>
+    <b>Policial:</b> ${r.policial || '—'} — ${r.matricula || '—'}<br>
+    <b>Lotação:</b> ${r.lotacao || '—'}<br>
+    <b>Item:</b> ${r.itemDesc || '—'}<br>
+    <b>Qtd.:</b> ${r.qtd || 0} &nbsp;|&nbsp; <b>Saída:</b> ${fmtData(r.dataSaida)}
+  `;
+  document.getElementById('dev-data').value = hoje();
+  document.getElementById('dev-condicao').value = 'Bom estado';
+  document.getElementById('dev-retorna-estoque').value = 'sim';
+  document.getElementById('dev-obs').value = '';
+  abrirModal('modal-devolucao');
+}
+
+function confirmarDevolucao(){
+  if(!devCautId) return;
+
+  const dataDev = document.getElementById('dev-data').value;
+  if(!dataDev){ alert('Informe a data de devolução.'); return; }
+
+  const retornaEstoque = document.getElementById('dev-retorna-estoque').value === 'sim';
+  const idx = DB.cautelas.findIndex(c => c.id === devCautId);
+  if(idx < 0) return;
+
+  const caut = DB.cautelas[idx];
+  DB.cautelas[idx].dataDev = dataDev;
+  DB.cautelas[idx].status = 'Devolvido';
+  DB.cautelas[idx].condicaoDev = document.getElementById('dev-condicao').value;
+  DB.cautelas[idx].obsDev = document.getElementById('dev-obs').value;
+  salvar('cautelas');
+
+  if(retornaEstoque){
+    const idxItem = DB.itens.findIndex(i => i.id === caut.itemId);
+    if(idxItem >= 0){
+      const qtdAtual = parseInt(DB.itens[idxItem].qtdDisp, 10) || 0;
+      DB.itens[idxItem].qtdDisp = qtdAtual + (parseInt(caut.qtd, 10) || 0);
+      DB.itens[idxItem].status = 'Disponível';
+      salvar('itens');
+    }
+  }
+
+  registrarMovimento({
+    tipo: 'Entrada (Devolução)',
+    itemDesc: caut.itemDesc,
+    qtd: caut.qtd,
+    policial: caut.policial,
+    lotacao: caut.lotacao,
+    data: dataDev,
+  });
+
+  fecharModal('modal-devolucao');
+  renderCautelasTable();
+  renderDashEstoque();
+  renderItensTable();
+  devCautId = null;
+}
+
+function abrirModalPolicialNativo(id) {
+  populateDeptos();
+  if(id) {
+    editandoPolicialId = id;
+    const p = DB.policiais.find(x => x.id === id);
+    document.getElementById('pol-matricula').value = p.matricula;
+    document.getElementById('pol-nome').value = p.nome;
+    document.getElementById('pol-cargo').value = ['Delegado de Polícia','Oficial Investigador de Polícia'].includes(p.cargo) ? p.cargo : 'Outros';
+    if(document.getElementById('pol-cargo').value === 'Outros') {
+      document.getElementById('group-pol-cargo-manual').style.display = 'flex';
+      document.getElementById('pol-cargo-manual').value = p.cargo;
+    }
+    document.getElementById('pol-depto').value = p.depto;
+    updateLotacaoModalPolicial();
+    setTimeout(() => { document.getElementById('pol-lotacao').value = p.lotacao; }, 100);
+  } else {
+    editandoPolicialId = null;
+    document.getElementById('pol-matricula').value = '';
+    document.getElementById('pol-nome').value = '';
+    document.getElementById('pol-cargo').value = 'Delegado de Polícia';
+    document.getElementById('group-pol-cargo-manual').style.display = 'none';
+  }
+  abrirModal('modal-policial');
+}
+
+function salvarPolicial(){
+  const mat = document.getElementById('pol-matricula').value.trim();
+  const nome = document.getElementById('pol-nome').value.trim();
+  let cargo = document.getElementById('pol-cargo').value;
+  if(cargo === 'Outros') cargo = document.getElementById('pol-cargo-manual').value.trim();
+  const depto = document.getElementById('pol-depto').value;
+  const lotacao = document.getElementById('pol-lotacao').value;
+
+  if(!mat || !nome || !depto || !lotacao || !cargo) { alert('Preencha os dados obrigatórios.'); return; }
+  
+  if(editandoPolicialId) {
+    const idx = DB.policiais.findIndex(x => x.id === editandoPolicialId);
+    if(idx >= 0) DB.policiais[idx] = { id: editandoPolicialId, matricula: mat, nome, cargo, depto, lotacao };
+  } else {
+    DB.policiais.push({ id: uid(), matricula: mat, nome, cargo, depto, lotacao });
+  }
+  salvar('policiais'); fecharModal('modal-policial'); renderPoliciaisTable();
+}
+
+function abrirModalLotacaoNativo(id) {
+  if(id) {
+    editandoLotacaoId = id;
+    const l = DB.lotacoes.find(x => x.id === id);
+    document.getElementById('lot-depto').value = l.depto;
+    document.getElementById('lot-nome').value = l.nome;
+    document.getElementById('lot-cidade').value = l.cidade;
+    document.getElementById('lot-seccional').value = l.seccional || '';
+    document.getElementById('lot-ais').value = l.ais || '';
+    document.getElementById('lot-circunscricao').value = l.circunscricao || '';
+    document.getElementById('lot-end').value = l.end || '';
+  } else {
+    editandoLotacaoId = null;
+    document.getElementById('lot-depto').value = '';
+    document.getElementById('lot-nome').value = '';
+    document.getElementById('lot-cidade').value = 'Fortaleza';
+    document.getElementById('lot-seccional').value = '';
+    document.getElementById('lot-ais').value = '';
+    document.getElementById('lot-circunscricao').value = '';
+    document.getElementById('lot-end').value = '';
+  }
+  abrirModal('modal-lotacao');
+}
+
+function salvarLotacaoManual(){
+  const dep = document.getElementById('lot-depto').value.trim();
+  const nome = document.getElementById('lot-nome').value.trim();
+  if(!dep || !nome) { alert('Campos obrigatórios ausentes.'); return; }
+
+  const reg = { id: editandoLotacaoId || uid(), depto: dep, nome, cidade: document.getElementById('lot-cidade').value, seccional: document.getElementById('lot-seccional').value || '—', ais: document.getElementById('lot-ais').value, circunscricao: document.getElementById('lot-circunscricao').value, end: document.getElementById('lot-end').value };
+  
+  if(editandoLotacaoId) {
+    const idx = DB.lotacoes.findIndex(x => x.id === editandoLotacaoId);
+    if(idx >= 0) DB.lotacoes[idx] = reg;
+  } else {
+    DB.lotacoes.push(reg);
+  }
+  salvar('lotacoes'); fecharModal('modal-lotacao'); renderLotacoesTable();
+}
+
+function sortTable(lista, coluna) {
+  currentSort.asc = (currentSort.col === coluna) ? !currentSort.asc : true;
+  currentSort.col = coluna;
+  
+  DB[lista].sort((a, b) => {
+    let valA = String(a[coluna] || '');
+    let valB = String(b[coluna] || '');
+    return currentSort.asc ? naturalCollator.compare(valA, valB) : naturalCollator.compare(valB, valA);
+  });
+  if(lista === 'lotacoes') renderLotacoesTable();
+  if(lista === 'policiais') renderPoliciaisTable();
+  if(lista === 'itens') renderItensTable();
+  if(lista === 'fornecedores') renderFornecedoresTable();
+}
+
+function renderPoliciaisTable(){
+  const q = document.getElementById('search-policiais')?.value.toLowerCase() || '';
+  const tb = document.getElementById('tbody-policiais'); if(!tb) return;
+  const filtrados = DB.policiais.filter(p => !q || `${p.nome} ${p.matricula} ${p.cargo} ${p.depto}`.toLowerCase().includes(q));
+  tb.innerHTML = filtrados.map(p=>`<tr><td><b>${p.matricula}</b></td><td>${p.nome}</td><td>${p.cargo||'—'}</td><td>${p.depto||'—'}</td><td>${p.lotacao||'—'}</td><td><button class="btn btn-xs btn-outline" onclick="abrirModalPolicialNativo('${p.id}')">✏️ Editar</button> <button class="btn btn-xs btn-danger" onclick="excluirPolicial('${p.id}')">🗑️</button></td></tr>`).join('');
+}
+
+function renderLotacoesTable(){
+  const q = document.getElementById('search-lotacoes')?.value.toLowerCase() || '';
+  const tbody = document.getElementById('tbody-lotacoes'); if(!tbody) return;
+  const filtrados = DB.lotacoes.filter(l => !q || `${l.depto} ${l.nome} ${l.seccional} ${l.ais} ${l.cidade}`.toLowerCase().includes(q));
+  tbody.innerHTML = filtrados.map(r => `<tr><td><b>${r.depto}</b></td><td>${r.nome}</td><td>${r.cidade}</td><td>${r.seccional}</td><td>${r.circunscricao}</td><td>AIS ${r.ais}</td><td><button class="btn btn-xs btn-outline" onclick="abrirModalLotacaoNativo('${r.id}')">✏️ Editar</button> <button class="btn btn-xs btn-danger" onclick="excluirLotacao('${r.id}')">🗑️</button></td></tr>`).join('');
+}
+
+function renderItensTable(){
+  const q = document.getElementById('search-itens')?.value.toLowerCase() || '';
+  const tb = document.getElementById('tbody-itens'); if(!tb) return;
+  const filtrados = DB.itens.filter(i => !q || `${i.patrimonio} ${i.descricao} ${i.categoria} ${i.serie}`.toLowerCase().includes(q));
+  tb.innerHTML = filtrados.map(i=>`<tr><td>${i.patrimonio}</td><td><b>${i.descricao}</b></td><td>${i.categoria}</td><td>${i.serie}</td><td>${i.qtdTotal}</td><td>${i.qtdDisp}</td><td>${i.qtdMin}</td><td><button class="btn btn-xs btn-danger" onclick="excluirItem('${i.id}')">🗑️</button></td></tr>`).join('');
+}
+
+function renderFornecedoresTable(){
+  const q = document.getElementById('search-fornecedores')?.value.toLowerCase() || '';
+  const tb = document.getElementById('tbody-fornecedores'); if(!tb) return;
+  const filtrados = DB.fornecedores.filter(f => !q || `${f.nome} ${f.cnpj} ${f.contato}`.toLowerCase().includes(q));
+  tb.innerHTML = filtrados.map(f=>`<tr><td><b>${f.nome}</b></td><td>${f.cnpj}</td><td>${f.contato}</td><td>${f.tel}</td><td><button class="btn btn-xs btn-danger" onclick="excluirFornecedor('${f.id}')">🗑️</button></td></tr>`).join('');
+}
+
+function renderArvoreInventario(cat) {
+  const tDiv = document.getElementById('g-item-tipo'); const tSel = document.getElementById('item-tipo-arvore');
+  if(!cat || !ARVORE_PRODUTOS[cat]) { tDiv.style.display='none'; return; }
+  tSel.innerHTML = '<option value="">Selecione o tipo...</option>';
+  Object.keys(ARVORE_PRODUTOS[cat]).forEach(t => { tSel.innerHTML += `<option value="${t}">${t}</option>`; });
+  tDiv.style.display='flex';
+}
+
+function renderModelosArvore(tipo) {
+  const cat = document.getElementById('item-categoria-arvore').value;
+  const mDiv = document.getElementById('g-item-marca'); const mSel = document.getElementById('item-marca-arvore');
+  document.getElementById('g-item-tipo-manual').style.display = (tipo === 'Outros') ? 'flex' : 'none';
+  if(!tipo || tipo === 'Outros' || !ARVORE_PRODUTOS[cat][tipo]) { mDiv.style.display='none'; return; }
+  mSel.innerHTML = '<option value="">Selecione a marca...</option>';
+  Object.keys(ARVORE_PRODUTOS[cat][tipo]).forEach(m => { mSel.innerHTML += `<option value="${m}">${m}</option>`; });
+  mDiv.style.display='flex';
+}
+
+function renderSubModelos(marca) {
+  const cat = document.getElementById('item-categoria-arvore').value;
+  const tipo = document.getElementById('item-tipo-arvore').value;
+  const modDiv = document.getElementById('g-item-modelo'); const modSel = document.getElementById('item-modelo-arvore');
+  document.getElementById('g-item-marca-manual').style.display = (marca === 'Outros') ? 'flex' : 'none';
+  if(!marca || marca === 'Outros' || !ARVORE_PRODUTOS[cat][tipo][marca]) { modDiv.style.display='none'; return; }
+  modSel.innerHTML = '<option value="">Selecione o modelo...</option>';
+  ARVORE_PRODUTOS[cat][tipo][marca].forEach(mo => { modSel.innerHTML += `<option value="${mo}">${mo}</option>`; });
+  modDiv.style.display='flex';
+}
+
+function autoFillPolicial(prefix){
+  const mat = document.getElementById(`${prefix}-matricula`).value.trim();
+  const pol = DB.policiais.find(p=>p.matricula===mat);
+  if(pol) {
+    if(prefix === 'caut') {
+      document.getElementById('caut-policial').value = pol.nome;
+      document.getElementById('caut-lotacao-auto').value = `${pol.depto} — ${pol.lotacao}`;
+    } else {
+      document.getElementById(`${prefix}-policial`).value = pol.nome;
+    }
+  }
+}
+
+function salvarItem(){
+  const cat = document.getElementById('item-categoria-arvore').value;
+  let tipo = document.getElementById('item-tipo-arvore').value; if(tipo==='Outros') tipo=document.getElementById('item-tipo-manual').value;
+  let marca = document.getElementById('item-marca-arvore').value || 'PCCE'; if(marca==='Outros') marca=document.getElementById('item-marca-manual').value;
+  let mod = document.getElementById('item-modelo-arvore').value || 'Padrão'; if(mod==='Outros') mod=document.getElementById('item-modelo-manual').value;
+  if(!cat || !tipo) return alert('Campos estruturais ausentes.');
+  const desc = `${tipo} ${marca} ${mod}`.trim();
+  DB.itens.push({ id: uid(), patrimonio: document.getElementById('item-patrimonio').value || 'S/P', descricao: desc, categoria: cat, serie: document.getElementById('item-serie').value || 'S/N', qtdTotal: parseInt(document.getElementById('item-qtd-total').value)||1, qtdDisp: parseInt(document.getElementById('item-qtd-disp').value)||1, qtdMin: parseInt(document.getElementById('item-qtd-min').value)||1, status: 'Disponível' });
+  salvar('itens'); registrarMovimento({ tipo: 'Entrada (Aquisição)', itemDesc: desc, qtd: 1 }); fecharModal('modal-item'); renderItensTable();
+}
+
+function salvarFornecedor(){
+  const nome = document.getElementById('forn-nome').value.trim(); if(!nome) return alert('Insira a Razão Social.');
+  DB.fornecedores.push({ id: uid(), nome, cnpj: document.getElementById('forn-cnpj').value, contato: document.getElementById('forn-contato').value, tel: document.getElementById('forn-tel').value });
+  salvar('fornecedores'); fecharModal('modal-fornecedor'); renderFornecedoresTable();
+}
+
+function salvarServico(){
+  const reg={ id: String(DB.servicos.length+1).padStart(4,'0'), tipo: document.getElementById('ns-tipo').value, armeiro: document.getElementById('ns-armeiro').value, dataRec: document.getElementById('ns-data-rec').value, dataDev: document.getElementById('ns-data-dev').value, status: document.getElementById('ns-status').value, motivo: document.getElementById('ns-motivo').value, matricula: document.getElementById('ns-matricula').value, policial: document.getElementById('ns-policial').value, depto: document.getElementById('ns-depto').value, lotacao: document.getElementById('ns-lotacao').value, modelo: document.getElementById('ns-modelo').value, serie: document.getElementById('ns-serie').value, descricao: document.getElementById('ns-descricao').value };
+  DB.servicos.push(reg); salvar('servicos'); document.getElementById('alert-servico-ok').classList.add('show'); setTimeout(()=>document.getElementById('alert-servico-ok').classList.remove('show'),3000);
+}
+
+function downloadModelo(tipo) {
+  const headers = BATCH_SCHEMAS[tipo];
+  let xml = `<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Modelo"><Table><Row>`;
+  headers.forEach(h => { xml += `<Cell><Data ss:Type="String">${h}</Data></Cell>`; });
+  xml += `</Row></Table></Worksheet></Workbook>`;
+  const blob = new Blob([xml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `SALT_modelo_${tipo}.xls`; a.click();
+}
+
+function importarLote(tipo) {
+  const fileInput = document.getElementById(`file-batch-${tipo}`); if (!fileInput || !fileInput.files.length) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const lines = e.target.result.split(/\r?\n/); if (lines.length <= 1) return;
+    let primeiraLinha = lines[0].replace(/[^\w\s;, '"\-]/g, '').trim();
+    const separador = primeiraLinha.includes(';') ? ';' : ',';
+    const headers = primeiraLinha.split(separador).map(h => h.replace(/^["']|["']$/g, '').trim());
+    let importados = 0;
+
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      const rawValues = lines[i].split(new RegExp(`${separador}(?=(?:(?:[^"]*"){2})*[^"]*$)`));
+      const row = {}; headers.forEach((h, idx) => { row[h] = rawValues[idx] ? rawValues[idx].trim().replace(/^["']|["']$/g, '') : ''; });
+
+      if (tipo === 'lotacoes' && row.depto && row.nome) {
+        row.id = uid(); row.seccional = row.seccional || '—'; DB.lotacoes.push(row); importados++;
+      } else if (tipo === 'policiais' && row.matricula && row.nome) {
+        row.id = uid(); DB.policiais.push(row); importados++;
+      } else if (tipo === 'itens' && row.descricao && row.categoria) {
+        row.id = uid(); row.qtdTotal = parseInt(row.qtdTotal)||1; row.qtdDisp = parseInt(row.qtdDisp)||1; DB.itens.push(row);
+        registrarMovimento({ tipo: 'Entrada (Aquisição)', itemDesc: row.descricao, qtd: row.qtdTotal }); importados++;
+      }
+    }
+    if (importados > 0) { salvar(tipo); alert(`Sucesso! Carregados ${importados} registros.`); navigate(tipo==='lotacoes'?'pg-cad-lotacao':(tipo==='policiais'?'pg-cad-policiais':'pg-cad-itens')); }
+  }; reader.readAsText(fileInput.files[0], 'UTF-8');
+}
+
+function importarNFeFornecedor() {
+  const fileInput = document.getElementById('file-nfe-fornecedor'); if(!fileInput.files.length) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const conteudo = e.target.result; let rSocial = "Fornecedor Extraído XML", cnpj = "00.000.000/0000-00";
+    if(conteudo.includes('<emit>')) {
+      const mRazao = conteudo.match(/<xNome>([^<]+)<\/xNome>/); const mCnpj = conteudo.match(/<CNPJ>([^<]+)<\/CNPJ>/);
+      if(mRazao) rSocial = mRazao[1]; if(mCnpj) cnpj = mCnpj[1].replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+    }
+    DB.fornecedores.push({ id: uid(), nome: rSocial, cnpj: cnpj, contato: 'Processamento de NF-e', tel: '—' });
+    salvar('fornecedores'); alert(`Fornecedor Cadastrado por Nota Fiscal.`); renderFornecedoresTable();
+  }; reader.readAsText(fileInput.files[0], 'UTF-8');
+}
+
+function gerarTermoDocumento(cautela) {
+  document.getElementById('termo-oficial-print-area').innerHTML = `<div class="cautela-doc"><div class="doc-header"><h1>POLÍCIA CIVIL DO ESTADO DO CEARÁ — PCCE</h1><h1>DIRETORIA TÉCNICO-OPERACIONAL — DTO</h1><h2>TERMO DE CAUTELA E RESPONSABILIDADE</h2></div><div class="doc-section"><h3>1. Servidor</h3><p><b>Nome:</b> ${cautela.policial} &nbsp;|&nbsp; <b>Matrícula:</b> ${cautela.matricula}</p><p><b>Lotação:</b> ${cautela.lotacao}</p></div><div class="doc-section"><h3>2. Ativo Bélico</h3><table><thead><tr><th>Material</th><th>Nº Série</th><th>Patrimônio</th><th>Qtd</th></tr></thead><tbody><tr><td><b>${cautela.itemDesc}</b></td><td>${cautela.serie}</td><td>${cautela.patrimonio}</td><td>${cautela.qtd}</td></tr></tbody></table></div><div class="assinatura-container"><div class="assin-linha">${cautela.policial}</div><div class="assin-linha">Almoxarifado DTO</div></div></div>`;
+  abrirModal('modal-termo-pdf');
+}
+function chamarTermoHistorico(id) { const c = DB.cautelas.find(x => x.id === id); if(c) gerarTermoDocumento(c); }
+function imprimirTermoDiv() {
+  const conteudo = document.getElementById('termo-oficial-print-area').innerHTML;
+  const w = window.open('', '_blank', 'width=900,height=800');
+  w.document.write(`<html><head><style>body{font-family:serif;padding:30px;}.cautela-doc{border:1px solid #000;padding:20px;}table{width:100%;border-collapse:collapse;}td,th{border:1px solid #000;padding:6px;}</style></head><body>${conteudo}</body></html>`);
+  w.document.close(); setTimeout(() => { w.print(); }, 500);
+}
+
+function registrarMovimento(m){ DB.movimentos.push({ id:uid(), data:m.data||hoje(), tipo:m.tipo, itemDesc:m.itemDesc, qtd:m.qtd, policial:m.policial||'—', lotacao:m.lotacao||'—' }); salvar('movimentos'); }
+function gerarRelatorio(){ document.getElementById('tbody-relatorio').innerHTML = DB.movimentos.map(m=>`<tr><td>${fmtData(m.data)}</td><td>${m.tipo}</td><td><b>${m.itemDesc}</b></td><td>${m.qtd}</td><td>${m.policial}</td><td>${m.lotacao}</td></tr>`).join(''); }
+
+function fecharModal(id){ document.getElementById(id).classList.remove('open'); }
+function abrirModalItem(){ abrirModal('modal-item'); }
+function abrirModalFornecedor(){ abrirModal('modal-fornecedor'); }
+function abrirModal(id){ document.getElementById(id).classList.add('open'); }
+function excluirLotacao(id){ DB.lotacoes=DB.lotacoes.filter(l=>l.id!==id); salvar('lotacoes'); renderLotacoesTable(); }
+function excluirPolicial(id){ DB.policiais=DB.policiais.filter(p=>p.id!==id); salvar('policiais'); renderPoliciaisTable(); }
+
+(function init(){ 
+  renderLotacoesTable(); renderPoliciaisTable(); renderItensTable(); renderFornecedoresTable(); renderCautelasTable(); renderDashServicos();
+})();
+</script>
+</body>
+</html>
