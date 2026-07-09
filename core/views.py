@@ -451,13 +451,19 @@ class ServicoViewSet(BaseViewSet):
         return Response({"codigo": Servico.get_next_code()})
 
     def perform_create(self, serializer):
-        # Extrai o objeto policial dos dados validados.
-        # O `pop` remove o campo para que não seja passado diretamente para o `Servico`.
-        policial = serializer.validated_data.pop("policial", None)
+        policial_id = serializer.validated_data.get("policial_id")
+        policial = None
+        if policial_id:
+            try:
+                policial = Policial.objects.get(pk=policial_id)
+            except Policial.DoesNotExist:
+                # Lida com o caso de um ID de policial inválido, se necessário
+                pass
 
-        # Prepara um dicionário com os dados do policial, se ele existir.
         extra_data = {}
-        if policial and isinstance(policial, Policial):
+        if policial:
+            # Associa o policial e preenche os campos denormalizados
+            extra_data["policial"] = policial
             extra_data["matricula"] = policial.matricula
             extra_data["policial_nome"] = policial.nome
             extra_data["depto"] = policial.depto
@@ -1021,6 +1027,16 @@ class DashboardEstoqueResumoView(APIView):
         ]
 
     @staticmethod
+    def _build_by_modelo(itens_base):
+        # Filtra apenas itens da categoria 'Armas' e busca os modelos do detalhe
+        armas_base = itens_base.filter(categoria__icontains="arma").select_related("arma_detalhe")
+        return [
+            [row["arma_detalhe__modelo"] or DEFAULT_PLACEHOLDER, int(row["total"] or 0)]
+            for row in armas_base.values("arma_detalhe__modelo").annotate(total=Sum("qtd_total")).order_by("-total", "arma_detalhe__modelo")[:10]
+            if row["arma_detalhe__modelo"]
+        ]
+
+    @staticmethod
     def _build_validade(itens_base):
         hoje = date.today()
         qtd_vencidos = 0
@@ -1084,47 +1100,34 @@ class DashboardEstoqueResumoView(APIView):
         }
 
     @staticmethod
-    def _armas_match_filters(depto_atual, seccional_atual, delegacia_atual, depto, seccional, delegacia):
-        return (
-            (not depto or depto_atual == depto)
-            and (not seccional or seccional_atual == seccional)
-            and (not delegacia or delegacia_atual == delegacia)
-        )
-
-    @staticmethod
-    def _build_armas_por_local(depto, seccional, delegacia):
+    def _build_armas_por_local(depto, seccional, delegacia, status_filtro, modelo):
         lotacao_map = {
             (normalize_text(lot["depto"]), normalize_text(lot["nome"])): lot["cidade"] or ""
             for lot in Lotacao.objects.values("depto", "nome", "cidade")
         }
 
-        armas_por_local = []
-        armas_qs = Cautela.objects.filter(status=Cautela.STATUS_ATIVA, categoria__iexact="armas")
-        for row in armas_qs.values("depto", "lotacao").annotate(quantidade=Sum("qtd")):
-            depto_atual = row["depto"] or ""
-            delegacia_atual = row["lotacao"] or ""
-            seccional_atual = lotacao_map.get((normalize_text(depto_atual), normalize_text(delegacia_atual)), "")
+        armas_qs = Cautela.objects.filter(
+            status=Cautela.STATUS_ATIVA, categoria__iexact="armas"
+        ).select_related("item", "item__arma_detalhe")
 
-            if not DashboardEstoqueResumoView._armas_match_filters(
-                depto_atual,
-                seccional_atual,
-                delegacia_atual,
-                depto,
-                seccional,
-                delegacia,
-            ):
-                continue
+        if depto:
+            armas_qs = armas_qs.filter(depto__iexact=depto)
+        if delegacia:
+            armas_qs = armas_qs.filter(lotacao__iexact=delegacia)
+        if status_filtro:
+            armas_qs = armas_qs.filter(item__status__iexact=status_filtro)
+        if modelo:
+            armas_qs = armas_qs.filter(item__arma_detalhe__modelo__iexact=modelo)
 
-            armas_por_local.append(
-                {
-                    "departamento": depto_atual or DEFAULT_PLACEHOLDER,
-                    "seccional": seccional_atual or DEFAULT_PLACEHOLDER,
-                    "delegacia": delegacia_atual or DEFAULT_PLACEHOLDER,
-                    "quantidade": int(row["quantidade"] or 0),
-                }
-            )
+        armas_por_local = [
+            {
+                "id": cautela.id, "modelo": getattr(getattr(cautela.item, 'arma_detalhe', None), 'modelo', DEFAULT_PLACEHOLDER),
+                "serie": cautela.item.serie or DEFAULT_PLACEHOLDER, "status": cautela.item.status or DEFAULT_PLACEHOLDER,
+                "departamento": cautela.depto or DEFAULT_PLACEHOLDER, "lotacao": cautela.lotacao or DEFAULT_PLACEHOLDER}
+            for cautela in armas_qs
+        ]
 
-        armas_por_local.sort(key=lambda item: (-item["quantidade"], item["delegacia"]))
+        armas_por_local.sort(key=lambda item: (item["departamento"], item["lotacao"], item["modelo"]))
         return armas_por_local
 
     def get(self, request):
@@ -1132,25 +1135,37 @@ class DashboardEstoqueResumoView(APIView):
         depto = (request.query_params.get("depto") or "").strip()
         seccional = (request.query_params.get("seccional") or "").strip()
         delegacia = (request.query_params.get("delegacia") or "").strip()
+        status_filtro = (request.query_params.get("status") or "").strip()
+        modelo = (request.query_params.get("modelo") or "").strip()
+
+        cautelas_filtradas = Cautela.objects.filter(status=Cautela.STATUS_ATIVA)
+        if categoria:
+            cautelas_filtradas = cautelas_filtradas.filter(item__categoria__icontains=categoria)
+        if depto:
+            cautelas_filtradas = cautelas_filtradas.filter(depto__iexact=depto)
+        if delegacia:
+            cautelas_filtradas = cautelas_filtradas.filter(lotacao__iexact=delegacia)
 
         itens_base = Item.objects.all()
         if categoria:
-            itens_base = itens_base.filter(categoria=categoria)
+            itens_base = itens_base.filter(categoria__icontains=categoria)
+
+        # Se um filtro de local for aplicado, filtramos os itens que estão nesses locais via cautela
+        if depto or delegacia:
+            itens_cautelados_no_local = cautelas_filtradas.values_list('item_id', flat=True)
+            itens_base = itens_base.filter(id__in=itens_cautelados_no_local)
 
         totais = self._build_totais(itens_base)
         categorias = self._build_categorias()
         lotacoes = self._build_locais()
         by_categoria = self._build_ranked_totals(itens_base, "categoria")
         by_status = self._build_ranked_totals(itens_base, "status")
+        by_modelo = self._build_by_modelo(itens_base)
         validade = self._build_validade(itens_base)
-
-        cautelas_filtradas = Cautela.objects.filter(status=Cautela.STATUS_ATIVA)
-        if categoria:
-            cautelas_filtradas = cautelas_filtradas.filter(item__categoria=categoria)
 
         ativas = cautelas_filtradas.count()
         registros_cautelas = Cautela.objects.count()
-        armas_por_local = self._build_armas_por_local(depto, seccional, delegacia)
+        armas_por_local = self._build_armas_por_local(depto, seccional, delegacia, status_filtro, modelo)
 
         return Response(
             {
@@ -1159,6 +1174,7 @@ class DashboardEstoqueResumoView(APIView):
                 "stats": {**totais, "ativas": ativas, "registros_cautelas": registros_cautelas},
                 "by_categoria": by_categoria,
                 "by_status": by_status,
+                "by_modelo": by_modelo,
                 "validade": validade,
                 "armas_por_local": armas_por_local,
             },

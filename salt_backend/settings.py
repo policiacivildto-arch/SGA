@@ -6,7 +6,9 @@ SECRET_KEY = "django-insecure-change-me"
 
 DEBUG = True
 
-ALLOWED_HOSTS = ["*"]
+# settings.py
+
+ALLOWED_HOSTS = ['*'] # '*' permite qualquer IP, ou coloque o IP específico da sua máquina
 
 INSTALLED_APPS = [
     "django.contrib.admin",
