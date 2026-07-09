@@ -1,9 +1,16 @@
 from io import BytesIO, StringIO
+from pathlib import Path
 import re
 import unicodedata
 from datetime import date, datetime
 
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Cm, Pt
+from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.mail import EmailMessage
 from django.core.management import call_command
+from django.core.validators import validate_email
 from django.db.models import Q, Sum
 from django.http import HttpResponse
 from rest_framework import status, viewsets
@@ -17,7 +24,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import cm
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Image as RLImage, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from openpyxl import Workbook
 
 from .models import (
@@ -539,6 +546,27 @@ class CautelaViewSet(BaseViewSet):
         ]
 
     @staticmethod
+    def _cautela_header_lines():
+        return [
+            "GOVERNO DO ESTADO DO CEARA",
+            "SECRETARIA DA SEGURANCA PUBLICA E DEFESA SOCIAL",
+            "DELEGACIA GERAL DA POLICIA CIVIL",
+            "DEPARTAMENTO TECNICO OPERACIONAL",
+            "UNIDADE DE APOIO LOGISTICO",
+        ]
+
+    @staticmethod
+    def _cautela_intro_text():
+        return "Recebi da POLICIA CIVIL DO ESTADO DO CEARA, o ITEM abaixo especificado:"
+
+    @staticmethod
+    def _cautela_logo_path():
+        logo_path = Path(__file__).resolve().parents[2] / "POLICIA CIVIL CE sem fundo.png"
+        if logo_path.exists():
+            return logo_path
+        return None
+
+    @staticmethod
     def _word_rows(cautela):
         def safe(value):
             return "" if value is None else str(value)
@@ -591,7 +619,52 @@ class CautelaViewSet(BaseViewSet):
     @staticmethod
     def _render_word_document(rows):
         document = Document()
-        document.add_heading("Cautela de Armamento", level=1)
+        
+        # 1. Configura margens para padrão oficial (Ofício)
+        for section in document.sections:
+            section.top_margin = Cm(2.0)
+            section.bottom_margin = Cm(2.0)
+            section.left_margin = Cm(3.0)
+            section.right_margin = Cm(2.0)
+
+        # 2. Insere a logo no topo
+        logo_path = CautelaViewSet._cautela_logo_path()
+        if logo_path:
+            try:
+                logo_paragraph = document.add_paragraph()
+                logo_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                # Zera o espaçamento abaixo da imagem para que o texto suba
+                logo_paragraph.paragraph_format.space_after = Pt(0)
+                logo_run = logo_paragraph.add_run()
+                logo_run.add_picture(str(logo_path), width=Cm(2.2)) # Tamanho ajustado
+            except Exception:
+                pass
+
+        # 3. Insere as linhas do cabeçalho agrupadas logo abaixo da imagem
+        header_lines = CautelaViewSet._cautela_header_lines()
+        for i, line in enumerate(header_lines):
+            paragraph = document.add_paragraph(line)
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            
+            # Remove o espaçamento entre as linhas, exceto na última
+            if i < len(header_lines) - 1:
+                paragraph.paragraph_format.space_after = Pt(0)
+            else:
+                paragraph.paragraph_format.space_after = Pt(18) # Dá um respiro antes do título da Cautela
+                
+            run = paragraph.runs[0]
+            run.bold = True
+            run.font.name = 'Arial'  # Fonte sóbria
+            run.font.size = Pt(10)   # Tamanho menor, típico de cabeçalho institucional
+
+        # 4. Continua com o documento padrão
+        heading = document.add_heading("CAUTELA", level=1)
+        heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        intro_paragraph = document.add_paragraph(CautelaViewSet._cautela_intro_text())
+        intro_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        document.add_paragraph("")
+
         table = document.add_table(rows=0, cols=2)
         for label, value in rows:
             row_cells = table.add_row().cells
@@ -602,14 +675,16 @@ class CautelaViewSet(BaseViewSet):
         document.add_heading("4. Termos e Responsabilidade", level=2)
         for texto in CautelaViewSet._termos_responsabilidade():
             document.add_paragraph(texto)
+            
         document.add_paragraph("")
         document.add_paragraph("_______________________________")
         document.add_paragraph("Recebedor(a)")
         document.add_paragraph("")
         document.add_paragraph("_______________________________")
         document.add_paragraph("Entregador(a)")
+        
         return document
-
+    
     @staticmethod
     def _word_filename(cautela):
         safe_number = re.sub(r"[^A-Za-z0-9_-]", "_", cautela.numero or f"cautela_{cautela.id}")
@@ -626,8 +701,48 @@ class CautelaViewSet(BaseViewSet):
             return ""
         return str(value)
 
+    @staticmethod
+    def _email_subject(cautela):
+        numero = cautela.numero or f"#{cautela.id}"
+        return f"Cautela {numero}"
+
+    @classmethod
+    def _email_body(cls, cautela):
+        numero = cautela.numero or f"#{cautela.id}"
+        return (
+            "Prezados,\n\n"
+            f"Segue em anexo o documento da cautela {numero}.\n"
+            "Em caso de duvidas, favor contatar o setor responsavel.\n\n"
+            "Mensagem enviada automaticamente pelo sistema SALT."
+        )
+
+    @classmethod
+    def _build_email_attachment(cls, cautela, formato):
+        formato_norm = str(formato or "pdf").strip().lower()
+        if formato_norm in {"word", "docx"}:
+            rows = cls._word_rows(cautela)
+            document = cls._render_word_document(rows)
+            output = BytesIO()
+            document.save(output)
+            output.seek(0)
+            return (
+                cls._word_filename(cautela),
+                output.getvalue(),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+
+        pdf_output = cls._build_pdf_document(cautela)
+        return (
+            cls._pdf_filename(cautela),
+            pdf_output.getvalue(),
+            "application/pdf",
+        )
+
     @classmethod
     def _build_pdf_document(cls, cautela):
+        from reportlab.lib.utils import ImageReader
+        from reportlab.lib.styles import ParagraphStyle
+
         item = cautela.item
         arma = getattr(item, "arma_detalhe", None)
         patrimonio = getattr(arma, "patrimonio", None) if arma else None
@@ -636,6 +751,19 @@ class CautelaViewSet(BaseViewSet):
         destinatario = cls._destinatario_label(cautela)
 
         styles = getSampleStyleSheet()
+        styles["Heading3"].alignment = 1
+        styles["Title"].alignment = 1
+
+        # Cria um estilo institucional elegante para o cabeçalho (sem itálico e em negrito)
+        estilo_cabecalho = ParagraphStyle(
+            'CabecalhoOficial',
+            parent=styles['Normal'],
+            fontName='Helvetica-Bold',
+            fontSize=10,
+            alignment=1,  # Centralizado
+            spaceAfter=2,
+        )
+
         output = BytesIO()
         doc = SimpleDocTemplate(
             output,
@@ -646,14 +774,42 @@ class CautelaViewSet(BaseViewSet):
             bottomMargin=1.5 * cm,
         )
 
-        story = [
-            Paragraph("TERMO DE CAUTELA", styles["Title"]),
+        story = []
+        logo_path = cls._cautela_logo_path()
+        if logo_path:
+            try:
+                # ImageReader pega as dimensões reais da imagem para travar a proporção
+                img_reader = ImageReader(str(logo_path))
+                iw, ih = img_reader.getSize()
+                
+                # Define a largura fixa (ex: 2.2 cm) e calcula a altura proporcional
+                largura_logo = 2.2 * cm
+                proporcao = ih / float(iw)
+                altura_logo = largura_logo * proporcao
+                
+                logo_img = RLImage(str(logo_path), width=largura_logo, height=altura_logo)
+                logo_img.hAlign = "CENTER"
+                story.append(logo_img)
+                story.append(Spacer(1, 0.2 * cm))
+            except Exception:
+                pass
+
+        # Cabeçalho usando o novo estilo (mantendo os textos originais para não gerar erro de encoding)
+        story.extend([
+            Paragraph("GOVERNO DO ESTADO DO CEARA", estilo_cabecalho),
+            Paragraph("SECRETARIA DA SEGURANCA PUBLICA E DEFESA SOCIAL", estilo_cabecalho),
+            Paragraph("DELEGACIA GERAL DA POLICIA CIVIL", estilo_cabecalho),
+            Paragraph("DEPARTAMENTO TECNICO OPERACIONAL", estilo_cabecalho),
+            Paragraph("UNIDADE DE APOIO LOGISTICO", estilo_cabecalho),
+            Spacer(1, 0.5 * cm),
+            Paragraph("CAUTELA", styles["Title"]),
+            Paragraph(cls._cautela_intro_text(), styles["Normal"]),
             Spacer(1, 0.4 * cm),
             Paragraph(f"Numero: {cls._pdf_safe(cautela.numero)}", styles["Normal"]),
             Paragraph(f"Emitido em: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}", styles["Normal"]),
             Spacer(1, 0.35 * cm),
             Paragraph("Dados da Cautela", styles["Heading3"]),
-        ]
+        ])
 
         dados_cautela = [
             ["Campo", "Valor"],
@@ -730,43 +886,32 @@ class CautelaViewSet(BaseViewSet):
             story.append(Paragraph(texto, styles["Normal"]))
             story.append(Spacer(1, 0.15 * cm))
 
-        story.extend([
-            Spacer(1, 0.5 * cm),
-            Paragraph("_______________________________", styles["Normal"]),
-            Paragraph("Recebedor(a)", styles["Normal"]),
-            Spacer(1, 0.6 * cm),
-            Paragraph("_______________________________", styles["Normal"]),
-            Paragraph("Entregador(a)", styles["Normal"]),
-        ])
+        # Espaço vertical para a assinatura manual
+        story.append(Spacer(1, 1.5 * cm)) 
 
+        # Tabela invisível para deixar assinaturas lado a lado
+        dados_assinaturas = [
+            ["_______________________________", "_______________________________"],
+            ["Recebedor(a)", "Entregador(a)"]
+        ]
+        
+        tabela_assinaturas = Table(dados_assinaturas, colWidths=[9.0 * cm, 9.0 * cm])
+        tabela_assinaturas.setStyle(TableStyle([
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
+            ("FONTSIZE", (0, 0), (-1, -1), 10),
+        ]))
+        
+        story.append(tabela_assinaturas)
+
+        # Processamento final OBRIGATÓRIO (aqui que o arquivo corrompido é evitado)
         doc.build(story)
         output.seek(0)
         return output
 
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        try:
-            # A lógica de criação agora está no método de classe do modelo
-            cautela = Cautela.registrar_cautela(**serializer.validated_data)
-        except ValueError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Retorna a cautela criada e serializada para o frontend
-        response_serializer = self.get_serializer(cautela)
-        headers = self.get_success_headers(response_serializer.data)
-        return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
-
-    def destroy(self, request, *args, **kwargs):
-        instance = self.get_object()
-        # A lógica de cancelamento foi movida para um método de instância no modelo
-        instance.cancelar_cautela()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
     @action(detail=False, methods=["get"], url_path="next-number")
     def next_number(self, request):
-        from datetime import datetime
-
         year = str(datetime.now().year)
         last_number = (
             Cautela.objects.filter(numero__startswith=f"CAU-{year}-")
@@ -831,6 +976,68 @@ class CautelaViewSet(BaseViewSet):
         response = HttpResponse(output.getvalue(), content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
+
+    @action(detail=True, methods=["post"], url_path="enviar-email")
+    def enviar_email(self, request, pk=None):
+        cautela = self.get_object()
+
+        formato = (request.data.get("formato") or "pdf").strip().lower()
+        if formato not in {"pdf", "word", "docx"}:
+            return Response(
+                {"detail": "Formato invalido. Use 'pdf' ou 'word'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        email_destino = (request.data.get("email") or "").strip()
+        if not email_destino:
+            email_destino = str(getattr(cautela.policial, "email", "") or "").strip()
+
+        if not email_destino:
+            return Response(
+                {"detail": "Informe um e-mail destino ou cadastre e-mail no policial da cautela."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            validate_email(email_destino)
+        except ValidationError:
+            return Response({"detail": "E-mail destino invalido."}, status=status.HTTP_400_BAD_REQUEST)
+
+        filename, attachment_bytes, content_type = self._build_email_attachment(cautela, formato)
+
+        from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@salt.local")
+        mensagem = EmailMessage(
+            subject=self._email_subject(cautela),
+            body=self._email_body(cautela),
+            from_email=from_email,
+            to=[email_destino],
+        )
+        mensagem.attach(filename, attachment_bytes, content_type)
+
+        try:
+            enviados = mensagem.send(fail_silently=False)
+        except Exception as exc:
+            return Response(
+                {"detail": f"Falha ao enviar e-mail: {exc}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        if enviados < 1:
+            return Response(
+                {"detail": "Nenhum e-mail foi enviado pelo backend."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return Response(
+            {
+                "status": "ok",
+                "detail": "Cautela enviada por e-mail com sucesso.",
+                "email": email_destino,
+                "formato": "word" if formato in {"word", "docx"} else "pdf",
+                "arquivo": filename,
+            },
+            status=status.HTTP_200_OK,
+        )
 
     @staticmethod
     def _xlsx_headers():
@@ -1100,12 +1307,7 @@ class DashboardEstoqueResumoView(APIView):
         }
 
     @staticmethod
-    def _build_armas_por_local(depto, seccional, delegacia, status_filtro, modelo):
-        lotacao_map = {
-            (normalize_text(lot["depto"]), normalize_text(lot["nome"])): lot["cidade"] or ""
-            for lot in Lotacao.objects.values("depto", "nome", "cidade")
-        }
-
+    def _build_armas_por_local(depto, seccional, delegacia, status_filtro, modelo, tipo):
         armas_qs = Cautela.objects.filter(
             status=Cautela.STATUS_ATIVA, categoria__iexact="armas"
         ).select_related("item", "item__arma_detalhe")
@@ -1116,12 +1318,16 @@ class DashboardEstoqueResumoView(APIView):
             armas_qs = armas_qs.filter(lotacao__iexact=delegacia)
         if status_filtro:
             armas_qs = armas_qs.filter(item__status__iexact=status_filtro)
+        if tipo:
+            armas_qs = armas_qs.filter(item__arma_detalhe__tipo__iexact=tipo)
         if modelo:
             armas_qs = armas_qs.filter(item__arma_detalhe__modelo__iexact=modelo)
 
         armas_por_local = [
             {
-                "id": cautela.id, "modelo": getattr(getattr(cautela.item, 'arma_detalhe', None), 'modelo', DEFAULT_PLACEHOLDER),
+                "id": cautela.id,
+                "tipo": getattr(getattr(cautela.item, 'arma_detalhe', None), 'tipo', DEFAULT_PLACEHOLDER),
+                "modelo": getattr(getattr(cautela.item, 'arma_detalhe', None), 'modelo', DEFAULT_PLACEHOLDER),
                 "serie": cautela.item.serie or DEFAULT_PLACEHOLDER, "status": cautela.item.status or DEFAULT_PLACEHOLDER,
                 "departamento": cautela.depto or DEFAULT_PLACEHOLDER, "lotacao": cautela.lotacao or DEFAULT_PLACEHOLDER}
             for cautela in armas_qs
@@ -1137,6 +1343,7 @@ class DashboardEstoqueResumoView(APIView):
         delegacia = (request.query_params.get("delegacia") or "").strip()
         status_filtro = (request.query_params.get("status") or "").strip()
         modelo = (request.query_params.get("modelo") or "").strip()
+        tipo = (request.query_params.get("tipo") or "").strip()
 
         cautelas_filtradas = Cautela.objects.filter(status=Cautela.STATUS_ATIVA)
         if categoria:
@@ -1145,10 +1352,22 @@ class DashboardEstoqueResumoView(APIView):
             cautelas_filtradas = cautelas_filtradas.filter(depto__iexact=depto)
         if delegacia:
             cautelas_filtradas = cautelas_filtradas.filter(lotacao__iexact=delegacia)
+        if status_filtro:
+            cautelas_filtradas = cautelas_filtradas.filter(item__status__iexact=status_filtro)
+        if tipo:
+            cautelas_filtradas = cautelas_filtradas.filter(item__arma_detalhe__tipo__iexact=tipo)
+        if modelo:
+            cautelas_filtradas = cautelas_filtradas.filter(item__arma_detalhe__modelo__iexact=modelo)
 
         itens_base = Item.objects.all()
         if categoria:
             itens_base = itens_base.filter(categoria__icontains=categoria)
+        if status_filtro:
+            itens_base = itens_base.filter(status__iexact=status_filtro)
+        if tipo:
+            itens_base = itens_base.filter(arma_detalhe__tipo__iexact=tipo)
+        if modelo:
+            itens_base = itens_base.filter(arma_detalhe__modelo__iexact=modelo)
 
         # Se um filtro de local for aplicado, filtramos os itens que estão nesses locais via cautela
         if depto or delegacia:
@@ -1162,15 +1381,35 @@ class DashboardEstoqueResumoView(APIView):
         by_status = self._build_ranked_totals(itens_base, "status")
         by_modelo = self._build_by_modelo(itens_base)
         validade = self._build_validade(itens_base)
+        tipos = list(
+            itens_base
+            .filter(categoria__icontains="arma")
+            .exclude(arma_detalhe__tipo__isnull=True)
+            .exclude(arma_detalhe__tipo__exact="")
+            .values_list("arma_detalhe__tipo", flat=True)
+            .distinct()
+            .order_by("arma_detalhe__tipo")
+        )
+        modelos = list(
+            itens_base
+            .filter(categoria__icontains="arma")
+            .exclude(arma_detalhe__modelo__isnull=True)
+            .exclude(arma_detalhe__modelo__exact="")
+            .values_list("arma_detalhe__modelo", flat=True)
+            .distinct()
+            .order_by("arma_detalhe__modelo")
+        )
 
         ativas = cautelas_filtradas.count()
         registros_cautelas = Cautela.objects.count()
-        armas_por_local = self._build_armas_por_local(depto, seccional, delegacia, status_filtro, modelo)
+        armas_por_local = self._build_armas_por_local(depto, seccional, delegacia, status_filtro, modelo, tipo)
 
         return Response(
             {
                 "categorias": categorias,
                 "locais": lotacoes,
+                "tipos": tipos,
+                "modelos": modelos,
                 "stats": {**totais, "ativas": ativas, "registros_cautelas": registros_cautelas},
                 "by_categoria": by_categoria,
                 "by_status": by_status,

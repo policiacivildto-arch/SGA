@@ -3,7 +3,20 @@ import unicodedata
 from django.db import models, transaction
 
 ITEM_STATUS_DISPONIVEL = "Disponivel"
-ITEM_STATUS_EM_CAUTELA = "Em Cautela"
+ITEM_STATUS_EM_CAUTELA = "Em Uso"
+ITEM_STATUS_BAIXA_VALIDOS = {
+    ITEM_STATUS_DISPONIVEL,
+    ITEM_STATUS_EM_CAUTELA,
+    "Apreendida",
+    "Destruida",
+    "Em Reparo",
+    "Furtada",
+    "Inservivel",
+    "Perdida",
+    "Recolhida",
+    "Ressarcida",
+    "Roubada",
+}
 
 
 class TimestampedModel(models.Model):
@@ -462,8 +475,7 @@ class Cautela(TimestampedModel):
 
         # Atualiza o item
         item.qtd_disp -= cautela.qtd
-        if item.qtd_disp == 0:
-            item.status = ITEM_STATUS_EM_CAUTELA
+        item.status = ITEM_STATUS_EM_CAUTELA
         item.save(update_fields=["qtd_disp", "status", "atualizado_em"])
 
         # Cria o movimento
@@ -487,16 +499,34 @@ class Cautela(TimestampedModel):
         )
         return cautela
 
+    def _resolver_status_baixa(self, condicao_dev, status_item, has_outra_cautela_ativa):
+        if has_outra_cautela_ativa:
+            return ITEM_STATUS_EM_CAUTELA
+
+        status_informado = str(status_item or "").strip()
+        if status_informado in ITEM_STATUS_BAIXA_VALIDOS:
+            return status_informado
+
+        motivo = str(condicao_dev or "").strip()
+        if motivo in ITEM_STATUS_BAIXA_VALIDOS:
+            return motivo
+
+        motivo_norm = self._normalize_text(motivo)
+        if motivo_norm in {"devolvido", "devolvida", "disponivel"}:
+            return ITEM_STATUS_DISPONIVEL
+
+        return ITEM_STATUS_DISPONIVEL
+
     @transaction.atomic
-    def devolver_cautela(self, data_dev, condicao_dev, obs_dev):
+    def devolver_cautela(self, data_dev, condicao_dev, obs_dev, status_item=None):
         if self.status != self.STATUS_ATIVA:
             raise ValueError("Apenas cautelas ativas podem ser devolvidas.")
 
         # Atualiza o item
         item = self.item
         item.qtd_disp += self.qtd
-        if item.status == ITEM_STATUS_EM_CAUTELA:
-            item.status = ITEM_STATUS_DISPONIVEL
+        has_outra_cautela_ativa = item.cautelas.filter(status=self.STATUS_ATIVA).exclude(pk=self.pk).exists()
+        item.status = self._resolver_status_baixa(condicao_dev, status_item, has_outra_cautela_ativa)
         item.save(update_fields=["qtd_disp", "status", "atualizado_em"])
 
         # Atualiza a cautela
@@ -527,8 +557,11 @@ class Cautela(TimestampedModel):
     def cancelar_cautela(self):
         if self.status == self.STATUS_ATIVA:
             self.item.qtd_disp += self.qtd
-            if self.item.status == ITEM_STATUS_EM_CAUTELA:
+            has_outra_cautela_ativa = self.item.cautelas.filter(status=self.STATUS_ATIVA).exclude(pk=self.pk).exists()
+            if not has_outra_cautela_ativa:
                 self.item.status = ITEM_STATUS_DISPONIVEL
+            else:
+                self.item.status = ITEM_STATUS_EM_CAUTELA
             self.item.save(update_fields=["qtd_disp", "status", "atualizado_em"])
         self.delete()
 

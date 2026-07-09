@@ -126,9 +126,26 @@ class CompraSerializer(serializers.ModelSerializer):
 class ItemSerializer(serializers.ModelSerializer):
     fornecedor_nome = serializers.CharField(source="fornecedor.nome", read_only=True)
 
+    @staticmethod
+    def _is_colete(categoria):
+        categoria_norm = str(categoria or "").strip().lower()
+        return categoria_norm in {"colete", "coletes"}
+
     def validate(self, attrs):
         if "serie" in attrs:
             attrs["serie"] = normalize_serie_text(attrs.get("serie"))
+
+        categoria = attrs.get("categoria")
+        if categoria is None and self.instance is not None:
+            categoria = self.instance.categoria
+
+        dt_val = attrs.get("dt_val")
+        if dt_val is None and self.instance is not None:
+            dt_val = self.instance.dt_val
+
+        if self._is_colete(categoria) and not dt_val:
+            raise serializers.ValidationError({"dt_val": "Data de validade e obrigatoria para itens da categoria colete."})
+
         return attrs
 
     class Meta:
