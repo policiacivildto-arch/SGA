@@ -343,12 +343,15 @@ function NovoServico({ onNavigate }) {
 					</div>
 					<div className="form-group">
 						<label htmlFor="ns-lotacao">Lotação da Unidade *</label>
-						<input
+						<select
 							id="ns-lotacao"
-							type="text"
 							value={form.lotacao}
 							onChange={(e) => setField('lotacao', e.target.value)}
-						/>
+							disabled={!form.depto}
+						>
+							<option value="">{form.depto ? 'Selecione...' : 'Selecione o departamento'}</option>
+							{lotacoes.map((item) => <option key={item} value={item}>{item}</option>)}
+						</select>
 					</div>
 				</div>
 

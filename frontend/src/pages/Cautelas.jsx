@@ -621,14 +621,23 @@ function Cautelas() {
                   <td>{row.qtd}</td>
                   <td><span className={`badge ${row.status === 'Ativa' ? 'badge-orange' : 'badge-green'}`}>{row.status}</span></td>
                   <td>
-                    <button className="btn btn-xs btn-outline" onClick={() => handleBaixarPdf(row.id, row.numero)}>PDF</button>{' '}
-                    {row.status === 'Ativa' && (
-                      <>
-                        <button className="btn btn-xs btn-success" onClick={() => handleDevolver(row.id)}>Devolver</button>{' '}
-                        <button className="btn btn-xs btn-danger" onClick={() => handleCancelar(row.id)}>Cancelar</button>
-                      </>
-                    )}
-                  </td>
+  <div className="flex items-center gap-2">
+    <button className="btn btn-xs btn-outline" onClick={() => handleBaixarPdf(row.id, row.numero)}>
+      PDF
+    </button>
+    
+    {row.status === 'Ativa' && (
+      <>
+        <button className="btn btn-xs btn-success" onClick={() => handleDevolver(row.id)}>
+          Devolver
+        </button>
+        <button className="btn btn-xs btn-danger" onClick={() => handleCancelar(row.id)}>
+          Cancelar
+        </button>
+      </>
+    )}
+  </div>
+</td>
                 </tr>
               ))}
             </tbody>
