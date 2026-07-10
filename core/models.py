@@ -64,6 +64,8 @@ class Lotacao(TimestampedModel):
     nome = models.CharField(max_length=200)
     cidade = models.CharField(max_length=120)
     resp = models.CharField(max_length=180, blank=True)
+    area_atuacao = models.CharField(max_length=255, blank=True)
+    ais = models.CharField(max_length=40, blank=True)
     tel = models.CharField(max_length=40, blank=True)
     end = models.CharField(max_length=255, blank=True)
     departamento_ref = models.ForeignKey(
@@ -90,6 +92,7 @@ class Lotacao(TimestampedModel):
 
 class Policial(TimestampedModel):
     matricula = models.CharField(max_length=40, unique=True)
+    cpf = models.CharField(max_length=14, blank=True)
     nome = models.CharField(max_length=180)
     cargo = models.CharField(max_length=120, blank=True)
     depto = models.CharField(max_length=120)
@@ -156,6 +159,9 @@ class Compra(TimestampedModel):
     tamanho = models.CharField(max_length=40, blank=True)
     sexo = models.CharField(max_length=40, blank=True)
     cargo = models.CharField(max_length=120, blank=True)
+    numero_nota_fiscal = models.CharField(max_length=80, blank=True)
+    numero_empenho = models.CharField(max_length=80, blank=True)
+    numero_tombo = models.CharField(max_length=80, blank=True)
     serie = models.CharField(max_length=120, blank=True)
     descricao = models.CharField(max_length=200)
     qtd_total = models.PositiveIntegerField(default=1)
@@ -178,6 +184,9 @@ class Item(TimestampedModel):
     patrimonio = models.CharField(max_length=60, blank=True)
     descricao = models.CharField(max_length=200)
     categoria = models.CharField(max_length=80)
+    tamanho = models.CharField(max_length=40, blank=True)
+    sexo = models.CharField(max_length=40, blank=True)
+    cargo = models.CharField(max_length=120, blank=True)
     marca = models.CharField(max_length=120, blank=True)
     serie = models.CharField(max_length=120, blank=True)
     qtd_total = models.PositiveIntegerField(default=1)
@@ -360,6 +369,9 @@ class Cautela(TimestampedModel):
     obs = models.TextField(blank=True)
     status = models.CharField(max_length=40, default="Ativa")
     condicao_dev = models.CharField(max_length=80, blank=True)
+    motivo_recolhimento = models.CharField(max_length=180, blank=True)
+    nup = models.CharField(max_length=80, blank=True)
+    numero_io_bo = models.CharField(max_length=80, blank=True)
     obs_dev = models.TextField(blank=True)
 
     class Meta:
@@ -517,10 +529,62 @@ class Cautela(TimestampedModel):
 
         return ITEM_STATUS_DISPONIVEL
 
+    @staticmethod
+    def _normalize_serie(value):
+        return str(value or "").replace(" ", "").upper()
+
+    @classmethod
+    def _validar_dados_baixa(cls, item, condicao_dev, motivo_recolhimento, nup, numero_io_bo, numero_serie_reparo):
+        motivo = str(condicao_dev or "").strip()
+        motivo_norm = cls._normalize_text(motivo)
+
+        if motivo_norm == "recolhida" and not str(motivo_recolhimento or "").strip():
+            raise ValueError("Informe o motivo quando a baixa for Recolhida.")
+
+        if motivo_norm == "recolhida" and not str(nup or "").strip():
+            raise ValueError("NUP e obrigatorio quando a baixa for Recolhida.")
+
+        if motivo_norm == "apreendida" and not str(numero_io_bo or "").strip():
+            raise ValueError("Numero do IO ou BO e obrigatorio para baixa por Apreendida.")
+
+        if motivo_norm != "em reparo":
+            return
+
+        serie_item = cls._normalize_serie(getattr(item, "serie", ""))
+        serie_informada = cls._normalize_serie(numero_serie_reparo)
+        serie_final = serie_informada or serie_item
+
+        if not serie_final:
+            raise ValueError("Numero de serie e obrigatorio para baixa em reparo.")
+
+        if not Servico.objects.filter(serie__iexact=serie_final).exists():
+            raise ValueError(
+                "Para baixa em reparo, cadastre primeiro um novo servico para este numero de serie."
+            )
+
     @transaction.atomic
-    def devolver_cautela(self, data_dev, condicao_dev, obs_dev, status_item=None):
+    def devolver_cautela(
+        self,
+        data_dev,
+        condicao_dev,
+        obs_dev,
+        status_item=None,
+        motivo_recolhimento="",
+        nup="",
+        numero_io_bo="",
+        numero_serie_reparo="",
+    ):
         if self.status != self.STATUS_ATIVA:
             raise ValueError("Apenas cautelas ativas podem ser devolvidas.")
+
+        self._validar_dados_baixa(
+            item=self.item,
+            condicao_dev=condicao_dev,
+            motivo_recolhimento=motivo_recolhimento,
+            nup=nup,
+            numero_io_bo=numero_io_bo,
+            numero_serie_reparo=numero_serie_reparo,
+        )
 
         # Atualiza o item
         item = self.item
@@ -533,8 +597,22 @@ class Cautela(TimestampedModel):
         self.data_dev = data_dev
         self.status = self.STATUS_DEVOLVIDO
         self.condicao_dev = condicao_dev
+        self.motivo_recolhimento = str(motivo_recolhimento or "").strip()
+        self.nup = str(nup or "").strip()
+        self.numero_io_bo = str(numero_io_bo or "").strip()
         self.obs_dev = obs_dev
-        self.save(update_fields=["data_dev", "status", "condicao_dev", "obs_dev", "atualizado_em"])
+        self.save(
+            update_fields=[
+                "data_dev",
+                "status",
+                "condicao_dev",
+                "motivo_recolhimento",
+                "nup",
+                "numero_io_bo",
+                "obs_dev",
+                "atualizado_em",
+            ]
+        )
 
         # Cria o movimento de devolução
         departamento_ref = self.policial.departamento_ref if self.policial else None

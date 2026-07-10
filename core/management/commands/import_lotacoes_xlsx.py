@@ -120,13 +120,14 @@ class Command(BaseCommand):
                 seccional = self._pick(row, header_map, "seccional")
                 area = self._pick(row, header_map, "area de atuacao", "area de atuação")
                 ais = self._pick(row, header_map, "ais")
+                responsavel = self._pick(row, header_map, "responsavel", "responsável", "resp")
 
                 if not delegacia or not departamento:
                     counters["ignoradas_sem_chave"] += 1
                     continue
 
                 cidade = seccional or area or ais or "N/D"
-                resp = area
+                resp = responsavel
 
                 endereco_parts = []
                 if seccional:
@@ -146,6 +147,8 @@ class Command(BaseCommand):
                         nome=delegacia,
                         cidade=cidade,
                         resp=resp,
+                        area_atuacao=area,
+                        ais=ais,
                         end=endereco,
                     )
                     counters["criadas"] += 1
@@ -158,12 +161,18 @@ class Command(BaseCommand):
                 if resp and lot.resp != resp:
                     lot.resp = resp
                     changed = True
+                if lot.area_atuacao != area:
+                    lot.area_atuacao = area
+                    changed = True
+                if lot.ais != ais:
+                    lot.ais = ais
+                    changed = True
                 if endereco and lot.end != endereco:
                     lot.end = endereco
                     changed = True
 
                 if changed:
-                    lot.save(update_fields=["cidade", "resp", "end", "atualizado_em"])
+                    lot.save(update_fields=["cidade", "resp", "area_atuacao", "ais", "end", "atualizado_em"])
                     counters["atualizadas"] += 1
                 else:
                     counters["inalteradas"] += 1
