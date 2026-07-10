@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { apiService } from '../services/api';
 import Modal from '../components/Modal';
 import { CARGOS_POLICIAIS, DEPARTAMENTOS_PADRAO } from '../constants/organizacao';
@@ -12,9 +12,12 @@ function CadPoliciais() {
   const [cargosMenu, setCargosMenu] = useState([]);
   const [departamentosMenu, setDepartamentosMenu] = useState([]);
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [form, setForm] = useState({ matricula: '', nome: '', cargo: '', depto: '', lotacao: '' });
+  const [isImporting, setIsImporting] = useState(false);
+  const [form, setForm] = useState({ matricula: '', cpf: '', nome: '', cargo: '', depto: '', lotacao: '' });
+  const fileInputRef = useRef(null);
 
   const loadRows = async () => {
     try {
@@ -100,7 +103,7 @@ function CadPoliciais() {
     try {
       setError('');
       await apiService.create('policiais', form);
-      setForm({ matricula: '', nome: '', cargo: '', depto: '', lotacao: '' });
+      setForm({ matricula: '', cpf: '', nome: '', cargo: '', depto: '', lotacao: '' });
       setIsModalOpen(false);
       await loadRows();
     } catch (err) {
@@ -117,6 +120,30 @@ function CadPoliciais() {
     }
   };
 
+  const handleImportFile = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setError('');
+      setInfo('');
+      setIsImporting(true);
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('apply', 'true');
+
+      const response = await apiService.upload('policiais/importar-planilha', formData);
+      setInfo(response?.detail || 'Planilha importada com sucesso.');
+      await Promise.all([loadRows(), loadLotacoes()]);
+    } catch (err) {
+      setError(err.message || 'Falha ao importar planilha de policiais.');
+    } finally {
+      if (event.target) event.target.value = '';
+      setIsImporting(false);
+    }
+  };
+
   return (
     <>
       <div className="page-header flex justify-between items-center">
@@ -124,9 +151,22 @@ function CadPoliciais() {
           <h1>👮 Gerenciamento de Policiais</h1>
           <p>Relação de servidores ativos no sistema de logística</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>➕ Cadastrar Servidor</button>
+        <div className="flex" style={{ gap: '8px' }}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx"
+            style={{ display: 'none' }}
+            onChange={handleImportFile}
+          />
+          <button className="btn btn-outline" onClick={() => fileInputRef.current?.click()} disabled={isImporting}>
+            {isImporting ? 'Importando...' : '📤 Importar Planilha'}
+          </button>
+          <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>➕ Cadastrar Servidor</button>
+        </div>
       </div>
       {error && <div className="alert alert-danger show">{error}</div>}
+      {info && <div className="alert alert-success show">{info}</div>}
 
       <Modal
         isOpen={isModalOpen}
@@ -141,6 +181,7 @@ function CadPoliciais() {
       >
         <div className="form-grid">
           <div className="form-group"><label htmlFor="pol-mat">Matrícula *</label><input id="pol-mat" value={form.matricula} onChange={(e) => setForm((p) => ({ ...p, matricula: e.target.value }))} /></div>
+          <div className="form-group"><label htmlFor="pol-cpf">CPF</label><input id="pol-cpf" value={form.cpf} onChange={(e) => setForm((p) => ({ ...p, cpf: e.target.value }))} placeholder="000.000.000-00" /></div>
           <div className="form-group"><label htmlFor="pol-nome">Nome *</label><input id="pol-nome" value={form.nome} onChange={(e) => setForm((p) => ({ ...p, nome: e.target.value }))} /></div>
           <div className="form-group">
             <label htmlFor="pol-cargo">Cargo</label>
@@ -173,14 +214,14 @@ function CadPoliciais() {
       </Modal>
 
       <div className="card">
-        <div className="search-bar"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="🔍 Buscar por nome, matrícula, cargo, depto..." style={{ width: '100%' }} /></div>
+        <div className="search-bar"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="🔍 Buscar por nome, matrícula, CPF, cargo, depto..." style={{ width: '100%' }} /></div>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Matrícula</th><th>Nome</th><th>Cargo</th><th>Departamento</th><th>Lotação</th><th>Ações</th></tr></thead>
+            <thead><tr><th>Matrícula</th><th>CPF</th><th>Nome</th><th>Cargo</th><th>Departamento</th><th>Lotação</th><th>Ações</th></tr></thead>
             <tbody>
               {rows.map((row) => (
                 <tr key={row.id}>
-                  <td><b>{row.matricula}</b></td><td>{row.nome}</td><td>{row.cargo || '—'}</td><td>{row.depto}</td><td>{row.lotacao}</td>
+                  <td><b>{row.matricula}</b></td><td>{row.cpf || '—'}</td><td>{row.nome}</td><td>{row.cargo || '—'}</td><td>{row.depto}</td><td>{row.lotacao}</td>
                   <td><button className="btn btn-xs btn-danger" onClick={() => handleDelete(row.id)}>🗑️</button></td>
                 </tr>
               ))}

@@ -226,6 +226,20 @@ const CATEGORIAS_INVENTARIO = [
   INVENTARIO_UNIFORMES.categoria,
 ];
 
+const ITEM_STATUS_OPTIONS = [
+  'Disponivel',
+  'Em Uso',
+  'Apreendida',
+  'Destruida',
+  'Em Reparo',
+  'Furtada',
+  'Inservivel',
+  'Perdida',
+  'Recolhida',
+  'Ressarcida',
+  'Roubada',
+];
+
 function getDescricaoArma(tipo, marca, modelo, calibre) {
   return [tipo, marca, modelo, calibre].filter(Boolean).join(' ');
 }
@@ -868,6 +882,16 @@ function CadItens() {
     }
   };
 
+  const handleUpdateStatus = async (id, novoStatus) => {
+    try {
+      setError('');
+      await apiService.update('itens', id, { status: novoStatus });
+      setRows((prev) => prev.map((row) => (row.id === id ? { ...row, status: novoStatus } : row)));
+    } catch (err) {
+      setError(err.message || 'Falha ao atualizar status do item.');
+    }
+  };
+
   return (
     <>
       <div className="page-header flex justify-between items-center">
@@ -1121,6 +1145,14 @@ function CadItens() {
           <div className="form-group"><label htmlFor="it-total">Qtd Total</label><input id="it-total" type="number" min="1" value={form.qtd_total} onChange={(e) => setForm((p) => ({ ...p, qtd_total: e.target.value }))} /></div>
           <div className="form-group"><label htmlFor="it-disp">Qtd Disp.</label><input id="it-disp" type="number" min="0" value={form.qtd_disp} onChange={(e) => setForm((p) => ({ ...p, qtd_disp: e.target.value }))} /></div>
           <div className="form-group"><label htmlFor="it-min">Qtd Mín.</label><input id="it-min" type="number" min="0" value={form.qtd_min} onChange={(e) => setForm((p) => ({ ...p, qtd_min: e.target.value }))} /></div>
+          <div className="form-group">
+            <label htmlFor="it-status">Status</label>
+            <select id="it-status" value={form.status} onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))}>
+              {ITEM_STATUS_OPTIONS.map((status) => (
+                <option key={status} value={status}>{status}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </Modal>
 
@@ -1128,11 +1160,27 @@ function CadItens() {
         <div className="search-bar"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="🔍 Buscar por descrição, série, categoria..." style={{ width: '100%' }} /></div>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Descrição</th><th>Categoria</th><th>Tombo</th><th>Série</th><th>Total</th><th>Disp.</th><th>Mín.</th><th>Ações</th></tr></thead>
+            <thead><tr><th>Descrição</th><th>Categoria</th><th>Status</th><th>Tombo</th><th>Série</th><th>Total</th><th>Disp.</th><th>Mín.</th><th>Ações</th></tr></thead>
             <tbody>
               {rows.map((row) => (
                 <tr key={row.id}>
-                  <td><b>{row.descricao}</b></td><td>{row.categoria}</td><td>{row.patrimonio || '—'}</td><td>{row.serie || '—'}</td><td>{row.qtd_total}</td><td>{row.qtd_disp}</td><td>{row.qtd_min}</td>
+                  <td><b>{row.descricao}</b></td>
+                  <td>{row.categoria}</td>
+                  <td>
+                    <select
+                      value={row.status || 'Disponivel'}
+                      onChange={(e) => handleUpdateStatus(row.id, e.target.value)}
+                    >
+                      {ITEM_STATUS_OPTIONS.map((status) => (
+                        <option key={status} value={status}>{status}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>{row.patrimonio || '—'}</td>
+                  <td>{row.serie || '—'}</td>
+                  <td>{row.qtd_total}</td>
+                  <td>{row.qtd_disp}</td>
+                  <td>{row.qtd_min}</td>
                   <td><button className="btn btn-xs btn-danger" onClick={() => handleDelete(row.id)}>🗑️</button></td>
                 </tr>
               ))}

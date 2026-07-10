@@ -1,12 +1,42 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { apiService } from '../services/api';
 import Modal from '../components/Modal';
+import { DEPARTAMENTOS_PADRAO } from '../constants/organizacao';
+import { getMenuOptions } from '../services/menuOptions';
 
 /* eslint-disable react/prop-types */
+
+const BAIXA_MOTIVO_OPTIONS = [
+  'Devolvido',
+  'Apreendida',
+  'Destruida',
+  'Em Reparo',
+  'Furtada',
+  'Inservivel',
+  'Perdida',
+  'Recolhida',
+  'Ressarcida',
+  'Roubada',
+];
+
+function mapMotivoToStatus(motivo) {
+  if (motivo === 'Devolvido') return 'Disponivel';
+  return motivo || 'Disponivel';
+}
+
+function normalizeText(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
 
 function Cautelas() {
   const [cautelas, setCautelas] = useState([]);
   const [policiais, setPoliciais] = useState([]);
+  const [departamentosMenu, setDepartamentosMenu] = useState([]);
+  const [departamentosBase, setDepartamentosBase] = useState([]);
   const [lotacoesBase, setLotacoesBase] = useState([]);
   const [armasDisponiveis, setArmasDisponiveis] = useState([]);
   const [armasByItemId, setArmasByItemId] = useState({});
@@ -15,6 +45,18 @@ function Cautelas() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBaixaModalOpen, setIsBaixaModalOpen] = useState(false);
+  const [cautelaBaixa, setCautelaBaixa] = useState(null);
+  const [baixaForm, setBaixaForm] = useState({
+    data_dev: new Date().toISOString().slice(0, 10),
+    condicao_dev: 'Devolvido',
+    status_item: 'Disponivel',
+    motivo_recolhimento: '',
+    nup: '',
+    numero_io_bo: '',
+    numero_serie_reparo: '',
+    obs_dev: '',
+  });
   const [form, setForm] = useState({
     numero: '',
     data_saida: '',
@@ -44,14 +86,6 @@ function Cautelas() {
     return `${prefix}${String(max + 1).padStart(4, '0')}`;
   };
 
-  const normalizeText = (value) => {
-    return String(value || '')
-      .trim()
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '');
-  };
-
   const normalizeSerialInput = (value) => {
     return String(value || '').replace(/\s+/g, '').toUpperCase();
   };
@@ -60,9 +94,10 @@ function Cautelas() {
     setLoading(true);
     setError('');
     try {
-      const [cautelasData, policiaisData, lotacoesData, itensData, armasData] = await Promise.all([
+      const [cautelasData, policiaisData, departamentosData, lotacoesData, itensData, armasData] = await Promise.all([
         apiService.getList('cautelas', new URLSearchParams({ page_size: '500', ordering: '-data_saida' })),
         apiService.getList('policiais', new URLSearchParams({ page_size: '500', ordering: 'nome' })),
+        apiService.getList('departamentos', new URLSearchParams({ page_size: '500', ordering: 'nome' })),
         apiService.getList('lotacoes', new URLSearchParams({ page_size: '500', ordering: 'depto,nome' })),
         apiService.getList('itens', new URLSearchParams({ page_size: '500', ordering: 'descricao' })),
         apiService.getList('armas', new URLSearchParams({ page_size: '1000' })),
@@ -71,6 +106,7 @@ function Cautelas() {
       const armasRows = armasData.results || [];
       setCautelas(cautelasRows);
       setPoliciais(policiaisData.results || []);
+      setDepartamentosBase(departamentosData.results || []);
       setLotacoesBase(lotacoesData.results || []);
       setItens((itensData.results || []).filter((item) => Number(item.qtd_disp || 0) > 0));
       setArmasDisponiveis(armasRows);
@@ -114,13 +150,39 @@ function Cautelas() {
     loadAll();
   }, []);
 
+  useEffect(() => {
+    const loadMenus = async () => {
+      try {
+        const departamentosData = await getMenuOptions('departamento');
+        setDepartamentosMenu(departamentosData);
+      } catch {
+        // fallback para listas locais
+      }
+    };
+
+    loadMenus();
+  }, []);
+
   const departamentos = useMemo(() => {
-    const set = new Set([
-      ...policiais.map((p) => p.depto).filter(Boolean),
-      ...lotacoesBase.map((l) => l.depto).filter(Boolean),
-    ]);
+    const set = new Set();
+    if (departamentosMenu.length > 0) {
+      departamentosMenu.forEach((opt) => set.add(opt.label));
+    } else {
+      DEPARTAMENTOS_PADRAO.forEach((depto) => set.add(depto));
+    }
+
+    departamentosBase.forEach((d) => {
+      if (d.nome) set.add(d.nome);
+    });
+    policiais.forEach((p) => {
+      if (p.depto) set.add(p.depto);
+    });
+    lotacoesBase.forEach((l) => {
+      if (l.depto) set.add(l.depto);
+    });
+
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  }, [policiais, lotacoesBase]);
+  }, [departamentosMenu, departamentosBase, policiais, lotacoesBase]);
 
   const lotacoes = useMemo(() => {
     if (!form.depto) return [];
@@ -386,10 +448,49 @@ function Cautelas() {
     }
   };
 
-  const handleDevolver = async (id) => {
+  const openBaixaModal = (cautela) => {
+    setCautelaBaixa(cautela);
+    setBaixaForm({
+      data_dev: new Date().toISOString().slice(0, 10),
+      condicao_dev: 'Devolvido',
+      status_item: 'Disponivel',
+      motivo_recolhimento: '',
+      nup: '',
+      numero_io_bo: '',
+      numero_serie_reparo: cautela?.serie || '',
+      obs_dev: '',
+    });
+    setIsBaixaModalOpen(true);
+  };
+
+  const handleDevolver = async () => {
     try {
-      const data_dev = new Date().toISOString().slice(0, 10);
-      await apiService.create(`cautelas/${id}/devolver`, { data_dev, condicao_dev: 'Devolvido', obs_dev: '' });
+      if (!cautelaBaixa?.id) return;
+      const motivoNorm = normalizeText(baixaForm.condicao_dev);
+
+      if (motivoNorm === 'recolhida' && !baixaForm.motivo_recolhimento.trim()) {
+        setError('Informe o motivo quando a baixa for Recolhida.');
+        return;
+      }
+
+      if (motivoNorm === 'recolhida' && !baixaForm.nup.trim()) {
+        setError('NUP é obrigatório quando a baixa for Recolhida.');
+        return;
+      }
+
+      if (motivoNorm === 'apreendida' && !baixaForm.numero_io_bo.trim()) {
+        setError('Informe o número do IO ou BO para baixa por Apreendida.');
+        return;
+      }
+
+      if (motivoNorm === 'em reparo' && !baixaForm.numero_serie_reparo.trim()) {
+        setError('Informe o número de série para baixa em reparo.');
+        return;
+      }
+
+      await apiService.create(`cautelas/${cautelaBaixa.id}/devolver`, baixaForm);
+      setIsBaixaModalOpen(false);
+      setCautelaBaixa(null);
       await loadAll();
     } catch (err) {
       setError(err.message || 'Não foi possível devolver cautela.');
@@ -591,6 +692,110 @@ function Cautelas() {
         </div>
       </Modal>
 
+      <Modal
+        isOpen={isBaixaModalOpen}
+        title="Baixa da Cautela"
+        onClose={() => setIsBaixaModalOpen(false)}
+        footer={(
+          <>
+            <button className="btn btn-outline" onClick={() => setIsBaixaModalOpen(false)}>Cancelar</button>
+            <button className="btn btn-primary" onClick={handleDevolver}>Confirmar Baixa</button>
+          </>
+        )}
+      >
+        <div className="form-grid">
+          <div className="form-group">
+            <label htmlFor="baixa-data">Data da Baixa *</label>
+            <input
+              id="baixa-data"
+              type="date"
+              value={baixaForm.data_dev}
+              onChange={(e) => setBaixaForm((prev) => ({ ...prev, data_dev: e.target.value }))}
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="baixa-motivo">Motivo *</label>
+            <select
+              id="baixa-motivo"
+              value={baixaForm.condicao_dev}
+              onChange={(e) => {
+                const motivo = e.target.value;
+                setBaixaForm((prev) => ({
+                  ...prev,
+                  condicao_dev: motivo,
+                  status_item: mapMotivoToStatus(motivo),
+                }));
+              }}
+            >
+              {BAIXA_MOTIVO_OPTIONS.map((motivo) => (
+                <option key={motivo} value={motivo}>{motivo}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label htmlFor="baixa-status">Status do Item</label>
+            <input
+              id="baixa-status"
+              value={baixaForm.status_item}
+              disabled
+            />
+          </div>
+          {baixaForm.condicao_dev === 'Recolhida' && (
+            <div className="form-group full">
+              <label htmlFor="baixa-motivo-recolhimento">Motivo da Recolhida *</label>
+              <input
+                id="baixa-motivo-recolhimento"
+                value={baixaForm.motivo_recolhimento}
+                placeholder="Ex.: CID.F"
+                onChange={(e) => setBaixaForm((prev) => ({ ...prev, motivo_recolhimento: e.target.value }))}
+              />
+            </div>
+          )}
+          {baixaForm.condicao_dev === 'Recolhida' && (
+            <div className="form-group full">
+              <label htmlFor="baixa-nup">NUP *</label>
+              <input
+                id="baixa-nup"
+                value={baixaForm.nup}
+                placeholder="Informe o NUP"
+                onChange={(e) => setBaixaForm((prev) => ({ ...prev, nup: e.target.value }))}
+              />
+            </div>
+          )}
+          {baixaForm.condicao_dev === 'Apreendida' && (
+            <div className="form-group full">
+              <label htmlFor="baixa-io-bo">Número do IO ou BO *</label>
+              <input
+                id="baixa-io-bo"
+                value={baixaForm.numero_io_bo}
+                placeholder="Informe o número do IO ou BO"
+                onChange={(e) => setBaixaForm((prev) => ({ ...prev, numero_io_bo: e.target.value }))}
+              />
+            </div>
+          )}
+          {baixaForm.condicao_dev === 'Em Reparo' && (
+            <div className="form-group full">
+              <label htmlFor="baixa-serie-reparo">Número de Série *</label>
+              <input
+                id="baixa-serie-reparo"
+                value={baixaForm.numero_serie_reparo}
+                placeholder="Informe o número de série da arma"
+                onChange={(e) => setBaixaForm((prev) => ({ ...prev, numero_serie_reparo: e.target.value }))}
+              />
+            </div>
+          )}
+          <div className="form-group full">
+            <label htmlFor="baixa-obs">Observações</label>
+            <textarea
+              id="baixa-obs"
+              placeholder="Detalhes da baixa"
+              value={baixaForm.obs_dev}
+              onChange={(e) => setBaixaForm((prev) => ({ ...prev, obs_dev: e.target.value }))}
+            />
+          </div>
+        </div>
+      </Modal>
+
       <div className="card">
         <div className="card-title">📋 Cautelas Registradas</div>
         <div className="table-wrap">
@@ -628,7 +833,7 @@ function Cautelas() {
     
     {row.status === 'Ativa' && (
       <>
-        <button className="btn btn-xs btn-success" onClick={() => handleDevolver(row.id)}>
+        <button className="btn btn-xs btn-success" onClick={() => openBaixaModal(row)}>
           Devolver
         </button>
         <button className="btn btn-xs btn-danger" onClick={() => handleCancelar(row.id)}>

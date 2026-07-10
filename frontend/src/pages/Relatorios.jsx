@@ -3,6 +3,27 @@ import { apiService } from '../services/api';
 
 /* eslint-disable react/prop-types */
 
+const normalizeRows = (payload) => {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (payload && Array.isArray(payload.results)) {
+    return payload.results;
+  }
+
+  return [];
+};
+
+const getItemLabel = (row) => row.item_desc || row.item_descricao || '—';
+
+const formatData = (value) => {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleDateString('pt-BR');
+};
+
 function Relatorios() {
   const [rows, setRows] = useState([]);
   const [search, setSearch] = useState('');
@@ -18,9 +39,10 @@ function Relatorios() {
       if (search.trim()) params.append('search', search.trim());
       if (categoria.trim()) params.append('categoria', categoria.trim());
       const data = await apiService.getList('movimentos', params);
-      setRows(data.results || []);
+      setRows(normalizeRows(data));
     } catch (err) {
       setError(err.message || 'Falha ao carregar relatório.');
+      setRows([]);
     } finally {
       setLoading(false);
     }
@@ -116,10 +138,10 @@ function Relatorios() {
               {!loading && rows.length === 0 && <tr><td colSpan="6" className="text-center p-4">Sem movimentações.</td></tr>}
               {!loading && rows.map((row) => (
                 <tr key={row.id}>
-                  <td>{row.data ? new Date(row.data).toLocaleDateString('pt-BR') : '—'}</td>
-                  <td>{row.tipo}</td>
-                  <td><b>{row.item_desc}</b></td>
-                  <td>{row.qtd}</td>
+                  <td>{formatData(row.data)}</td>
+                  <td>{row.tipo || '—'}</td>
+                  <td><b>{getItemLabel(row)}</b></td>
+                  <td>{row.qtd ?? '—'}</td>
                   <td>{row.policial || '—'}</td>
                   <td>{row.lotacao || '—'}</td>
                 </tr>

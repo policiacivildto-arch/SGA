@@ -203,6 +203,9 @@ function CadFornecedores() {
     tamanho: '',
     sexo: '',
     cargo: '',
+    numero_nota_fiscal: '',
+    numero_empenho: '',
+    numero_tombo: '',
     serie: '',
     qtd_total: 1,
     status: 'Disponivel',
@@ -418,6 +421,9 @@ function CadFornecedores() {
         tamanho: formCompra.tamanho,
         sexo: formCompra.sexo,
         cargo: formCompra.cargo,
+        numero_nota_fiscal: formCompra.numero_nota_fiscal,
+        numero_empenho: formCompra.numero_empenho,
+        numero_tombo: formCompra.numero_tombo,
         descricao: descricaoCompra,
         serie: isUniformes ? '' : formCompra.serie,
         qtd_total: qtdTotal,
@@ -444,6 +450,9 @@ function CadFornecedores() {
         tamanho: '',
         sexo: '',
         cargo: '',
+        numero_nota_fiscal: '',
+        numero_empenho: '',
+        numero_tombo: '',
         serie: '',
         qtd_total: 1,
         status: 'Disponivel',
@@ -641,6 +650,30 @@ function CadFornecedores() {
           <div className="form-group">
             <label htmlFor="comp-dt-val">Data de Validade{isColetes ? ' *' : ''}</label>
             <input id="comp-dt-val" type="date" value={formCompra.dt_val} onChange={(e) => setFormCompra((p) => ({ ...p, dt_val: e.target.value }))} />
+          </div>
+          <div className="form-group">
+            <label htmlFor="comp-nota-fiscal">Nº Nota Fiscal</label>
+            <input
+              id="comp-nota-fiscal"
+              value={formCompra.numero_nota_fiscal}
+              onChange={(e) => setFormCompra((p) => ({ ...p, numero_nota_fiscal: e.target.value }))}
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="comp-empenho">Nº Empenho</label>
+            <input
+              id="comp-empenho"
+              value={formCompra.numero_empenho}
+              onChange={(e) => setFormCompra((p) => ({ ...p, numero_empenho: e.target.value }))}
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="comp-tombo">Nº Tombo</label>
+            <input
+              id="comp-tombo"
+              value={formCompra.numero_tombo}
+              onChange={(e) => setFormCompra((p) => ({ ...p, numero_tombo: e.target.value }))}
+            />
           </div>
           <div className="form-group">
             <label htmlFor="comp-cat">Categoria *</label>
@@ -883,7 +916,7 @@ function CadFornecedores() {
         <div className="card-title">🧾 Compras Vinculadas ao Fornecedor</div>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Data</th><th>Fornecedor</th><th>Descrição</th><th>Categoria</th><th>Valor Compra</th><th>Qtd</th><th>Status</th><th>Ações</th></tr></thead>
+            <thead><tr><th>Data</th><th>Fornecedor</th><th>Descrição</th><th>Categoria</th><th>Nº NF</th><th>Nº Empenho</th><th>Nº Tombo</th><th>Valor Compra</th><th>Qtd</th><th>Status</th><th>Ações</th></tr></thead>
             <tbody>
               {compras.map((row) => (
                 <tr key={row.id}>
@@ -891,6 +924,9 @@ function CadFornecedores() {
                   <td>{row.fornecedor_nome || '—'}</td>
                   <td><b>{row.descricao}</b></td>
                   <td>{row.categoria}</td>
+                  <td>{row.numero_nota_fiscal || '—'}</td>
+                  <td>{row.numero_empenho || '—'}</td>
+                  <td>{row.numero_tombo || '—'}</td>
                   <td>{row.valor_compra == null ? '—' : Number(row.valor_compra).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                   <td>{row.qtd_total}</td>
                   <td>{row.status || 'Pendente'}</td>

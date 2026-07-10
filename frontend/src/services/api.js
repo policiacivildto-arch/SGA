@@ -1,4 +1,5 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
+const runtimeHost = typeof window !== 'undefined' ? window.location.hostname : '127.0.0.1';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || `http://${runtimeHost}:8000/api`;
 
 const buildUrl = (resource, params) => {
   const normalizedResource = String(resource || '').replace(/^\/+|\/+$/g, '');
@@ -23,6 +24,11 @@ const parseResponse = async (response) => {
 };
 
 export const apiService = {
+  async get(resource, params) {
+    const response = await fetch(buildUrl(resource, params));
+    return parseResponse(response);
+  },
+
   async getList(resource, params) {
     const response = await fetch(buildUrl(resource, params));
     return parseResponse(response);
@@ -41,6 +47,14 @@ export const apiService = {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
+    });
+    return parseResponse(response);
+  },
+
+  async upload(resource, formData) {
+    const response = await fetch(buildUrl(resource), {
+      method: 'POST',
+      body: formData,
     });
     return parseResponse(response);
   },

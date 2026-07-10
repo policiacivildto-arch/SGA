@@ -7,6 +7,8 @@ function DashboardEstoque() {
   const [dashboard, setDashboard] = useState({
     categorias: [],
     locais: [],
+    tipos: [],
+    modelos: [],
     stats: { total: 0, disp: 0, ativas: 0, registros_itens: 0 },
     by_categoria: [],
     by_status: [],
@@ -27,6 +29,7 @@ function DashboardEstoque() {
   const [deptoFiltro, setDeptoFiltro] = useState('');
   const [seccionalFiltro, setSeccionalFiltro] = useState('');
   const [delegaciaFiltro, setDelegaciaFiltro] = useState('');
+  const [tipoFiltro, setTipoFiltro] = useState('');
   const [modeloFiltro, setModeloFiltro] = useState('');
   const [statusFiltro, setStatusFiltro] = useState('');
 
@@ -41,6 +44,7 @@ function DashboardEstoque() {
         if (seccionalFiltro) params.set('seccional', seccionalFiltro);
         if (delegaciaFiltro) params.set('delegacia', delegaciaFiltro);
         if (statusFiltro) params.set('status', statusFiltro);
+        if (tipoFiltro) params.set('tipo', tipoFiltro);
         if (modeloFiltro) params.set('modelo', modeloFiltro);
 
         const response = await apiService.getList('dashboard/estoque', params);
@@ -54,7 +58,7 @@ function DashboardEstoque() {
 
     const timer = setTimeout(() => loadData(), 300);
     return () => clearTimeout(timer);
-  }, [categoriaFiltro, deptoFiltro, seccionalFiltro, delegaciaFiltro, modeloFiltro, statusFiltro]);
+  }, [categoriaFiltro, deptoFiltro, seccionalFiltro, delegaciaFiltro, tipoFiltro, modeloFiltro, statusFiltro]);
 
   const categorias = useMemo(() => dashboard.categorias || [], [dashboard]);
   const locaisFiltro = useMemo(() => dashboard.locais || [], [dashboard]);
@@ -84,10 +88,8 @@ function DashboardEstoque() {
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
   }, [locaisFiltro, deptoFiltro, seccionalFiltro]);
 
-  const modeloOptions = useMemo(() => {
-    const set = new Set((dashboard.armas_por_local || []).map(arma => arma.modelo));
-    return Array.from(set).sort();
-  }, [dashboard.armas_por_local]);
+  const tipoOptions = useMemo(() => dashboard.tipos || [], [dashboard]);
+  const modeloOptions = useMemo(() => dashboard.modelos || [], [dashboard]);
 
   const byCategoria = useMemo(() => dashboard.by_categoria || [], [dashboard]);
   const byStatus = useMemo(() => dashboard.by_status || [], [dashboard]);
@@ -116,13 +118,24 @@ function DashboardEstoque() {
   const validadeGrafico = useMemo(() => {
     const rows = validadePorAno;
     const width = 1200;
-    const height = 260;
-    const left = 38;
-    const right = 18;
-    const top = 18;
-    const bottom = 44;
+    const height = 340;
+    const left = 52;
+    const right = 28;
+    const top = 26;
+    const bottom = 62;
 
-    if (rows.length === 0) return { viewBox: `0 0 ${width} ${height}`, points: [], max: 1, baselineY: height - bottom, left, right };
+    if (rows.length === 0) {
+      return {
+        viewBox: `0 0 ${width} ${height}`,
+        points: [],
+        max: 1,
+        baselineY: height - bottom,
+        left,
+        right,
+        top,
+        width,
+      };
+    }
 
     const maxRaw = Math.max(...rows.map((r) => r.quantidade), 1);
     const max = Math.max(10, Math.ceil(maxRaw * 1.2)); 
@@ -136,7 +149,16 @@ function DashboardEstoque() {
       y: top + ((1 - (row.quantidade / max)) * usableH),
     }));
 
-    return { viewBox: `0 0 ${width} ${height}`, points, max, baselineY: height - bottom, left, right };
+    return {
+      viewBox: `0 0 ${width} ${height}`,
+      points,
+      max,
+      baselineY: height - bottom,
+      left,
+      right,
+      top,
+      width,
+    };
   }, [validadePorAno]);
 
   const validadePath = useMemo(() => {
@@ -354,6 +376,40 @@ function DashboardEstoque() {
         .ds-table tr:last-child td {
           border-bottom: none;
         }
+
+        .ds-validade-kpis {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 10px;
+          margin-bottom: 16px;
+        }
+        .ds-validade-kpi {
+          border: 1px solid #e5e7eb;
+          border-radius: 10px;
+          padding: 10px 12px;
+          background: #f8fafc;
+        }
+        .ds-validade-kpi-value {
+          font-size: 28px;
+          line-height: 1;
+          font-weight: 800;
+          color: #0f172a;
+        }
+        .ds-validade-kpi-label {
+          margin-top: 6px;
+          font-size: 12px;
+          font-weight: 600;
+          color: #475569;
+        }
+
+        @media (max-width: 900px) {
+          .ds-validade-kpis {
+            grid-template-columns: 1fr;
+          }
+          .ds-validade-kpi-value {
+            font-size: 24px;
+          }
+        }
       `}</style>
 
       {error && <div style={{ color: '#ef4444', marginBottom: '15px' }}>{error}</div>}
@@ -377,6 +433,10 @@ function DashboardEstoque() {
         <select className="ds-select" value={categoriaFiltro} onChange={(e) => setCategoriaFiltro(e.target.value)}>
           <option value="">Categoria (Todas)</option>
           {categorias.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select className="ds-select" value={tipoFiltro} onChange={(e) => { setTipoFiltro(e.target.value); setModeloFiltro(''); }}>
+          <option value="">Tipo (Todos)</option>
+          {tipoOptions.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
         <select className="ds-select" value={modeloFiltro} onChange={(e) => setModeloFiltro(e.target.value)}>
           <option value="">Modelo (Todos)</option>
@@ -500,15 +560,45 @@ function DashboardEstoque() {
         {/* Gráfico de Validade (Original SVG mantido dentro do card) */}
         <div className="ds-card">
           <div className="ds-card-title">⏰ Controle de Vencimento</div>
+          <div className="ds-validade-kpis">
+            <div className="ds-validade-kpi">
+              <div className="ds-validade-kpi-value">{validadeResumo.qtdVencidos.toLocaleString('pt-BR')}</div>
+              <div className="ds-validade-kpi-label">Vencidos</div>
+            </div>
+            <div className="ds-validade-kpi">
+              <div className="ds-validade-kpi-value">{validadeResumo.qtdVence30.toLocaleString('pt-BR')}</div>
+              <div className="ds-validade-kpi-label">Vencem em ate 1 ano</div>
+            </div>
+            <div className="ds-validade-kpi">
+              <div className="ds-validade-kpi-value">{validadeResumo.qtdVence60.toLocaleString('pt-BR')}</div>
+              <div className="ds-validade-kpi-label">Vencem em ate 2 anos</div>
+            </div>
+          </div>
           <div style={{ position: 'relative', marginTop: '10px' }}>
             {validadePorAno.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
-                Sem itens com data de validade para exibir.
+                {validadeResumo.qtdSemValidade > 0
+                  ? `${validadeResumo.qtdSemValidade.toLocaleString('pt-BR')} item(ns) sem data de validade cadastrada.`
+                  : 'Sem itens com data de validade para exibir.'}
               </div>
             ) : (
-              <svg viewBox={validadeGrafico.viewBox} style={{ width: '100%', height: '260px', display: 'block' }}>
-                <line x1="38" y1={validadeGrafico.baselineY} x2="1182" y2={validadeGrafico.baselineY} stroke="#e5e7eb" strokeWidth="2" />
-                <line x1="38" y1="18" x2="38" y2={validadeGrafico.baselineY} stroke="#e5e7eb" strokeWidth="1" />
+              <svg viewBox={validadeGrafico.viewBox} style={{ width: '100%', height: '380px', display: 'block' }}>
+                <line
+                  x1={validadeGrafico.left}
+                  y1={validadeGrafico.baselineY}
+                  x2={validadeGrafico.width - validadeGrafico.right}
+                  y2={validadeGrafico.baselineY}
+                  stroke="#e5e7eb"
+                  strokeWidth="2"
+                />
+                <line
+                  x1={validadeGrafico.left}
+                  y1={validadeGrafico.top}
+                  x2={validadeGrafico.left}
+                  y2={validadeGrafico.baselineY}
+                  stroke="#e5e7eb"
+                  strokeWidth="1"
+                />
 
                 {validadeGrafico.points.length > 1 && (
                   <path d={validadePath} fill="none" stroke="#1d4ed8" strokeWidth="4" strokeLinejoin="round" strokeLinecap="round" />
@@ -516,12 +606,12 @@ function DashboardEstoque() {
 
                 {validadeGrafico.points.map((p) => (
                   <g key={`p-${p.ano}`}>
-                    <circle cx={p.x} cy={p.y} r="5" fill="#1e3a8a" />
-                    <text x={p.x} y={p.y - 12} textAnchor="middle" fontSize="14" fill="#111" fontWeight="700">
+                    <circle cx={p.x} cy={p.y} r="7" fill="#1e3a8a" />
+                    <text x={p.x} y={p.y - 18} textAnchor="middle" fontSize="20" fill="#111" fontWeight="800">
                       {p.quantidade.toLocaleString('pt-BR')}
                     </text>
-                    <line x1={p.x} y1={validadeGrafico.baselineY} x2={p.x} y2={validadeGrafico.baselineY - 6} stroke="#d1d5db" strokeWidth="2" />
-                    <text x={p.x} y={validadeGrafico.baselineY + 22} textAnchor="middle" fontSize="13" fill="#6b7280" fontWeight="600">
+                    <line x1={p.x} y1={validadeGrafico.baselineY} x2={p.x} y2={validadeGrafico.baselineY - 10} stroke="#d1d5db" strokeWidth="2" />
+                    <text x={p.x} y={validadeGrafico.baselineY + 36} textAnchor="middle" fontSize="24" fill="#334155" fontWeight="800">
                       {p.ano}
                     </text>
                   </g>
